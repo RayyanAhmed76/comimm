@@ -120,9 +120,10 @@ export function MuteButton({ variant = 'dark' }: { variant?: Variant }) {
       aria-pressed={muted}
       title={muted ? t('audio.unmute') : t('audio.mute')}
       aria-label={muted ? t('audio.unmute') : t('audio.mute')}
-      className={iconBtn(variant)}
+      className={cn(iconBtn(variant), muted && 'w-auto gap-1.5 px-2.5 text-xs font-semibold text-orange-300')}
     >
       {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+      {muted && <span className="hidden sm:inline">{t('audio.muted')}</span>}
     </button>
   )
 }
@@ -169,7 +170,7 @@ export function NotificationBell({ variant = 'light' }: { variant?: Variant }) {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[min(360px,90vw)] overflow-hidden rounded-2xl border border-slate-200 bg-white text-ink shadow-xl">
+        <div className="absolute right-0 z-50 mt-2 w-[min(440px,92vw)] overflow-hidden rounded-2xl border border-slate-200 bg-white text-ink shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <span className="font-semibold">{t('notif.title')}</span>
             <button
@@ -191,7 +192,7 @@ export function NotificationBell({ variant = 'light' }: { variant?: Variant }) {
                     <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', isUnread ? 'bg-brand-600' : 'bg-transparent')} />
                     <span className="min-w-0 flex-1">
                       <span className={cn('block text-sm', isUnread ? 'font-semibold' : 'font-medium')}>{loc(n.title)}</span>
-                      <span className="block truncate text-xs text-muted">{loc(n.body)}</span>
+                      <span className="block text-xs leading-snug text-muted">{loc(n.body)}</span>
                       <span className="mt-0.5 block text-[11px] text-slate-400">{fmtDateTime(n.date, lang)}</span>
                     </span>
                     {isUnread && (

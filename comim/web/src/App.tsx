@@ -19,6 +19,7 @@ import { Classes } from '@/pages/admin/Classes'
 import { AuditLog } from '@/pages/admin/AuditLog'
 import { Headsets } from '@/pages/admin/Headsets'
 import { Settings } from '@/pages/admin/Settings'
+import { AdminClassDetail, HeadsetDetail, UserDetail } from '@/pages/admin/Details'
 
 import CourseMenu from '@/pages/student/CourseMenu'
 import MyResults from '@/pages/student/MyResults'
@@ -68,16 +69,20 @@ export default function App() {
         <Route path="/teacher/preview" element={g(['teacher'], <LessonPreview />)} />
         <Route path="/teacher/preview/exploded" element={g(['teacher'], <ExplodedView />)} />
         <Route path="/teacher/assignments/:id/edit" element={g(['teacher'], <LegacyAssignmentEdit />)} />
-        <Route path="/teacher/question-bank" element={g(['teacher', 'admin'], <QuestionBank />)} />
+        <Route path="/teacher/question-bank" element={g(['teacher'], <QuestionBank />)} />
 
         {/* Client admin */}
         <Route path="/admin/users" element={g(['admin'], <Users />)} />
+        <Route path="/admin/users/:id" element={g(['admin'], <UserDetail />)} />
         <Route path="/admin/users/:id/edit" element={<Navigate to="/admin/users" replace />} />
         <Route path="/admin/classes" element={g(['admin'], <Classes />)} />
+        <Route path="/admin/classes/:id" element={g(['admin'], <AdminClassDetail />)} />
         <Route path="/admin/classes/:id/edit" element={<Navigate to="/admin/classes" replace />} />
+        <Route path="/admin/questions" element={g(['admin'], <QuestionBank />)} />
         <Route path="/admin/audit" element={g(['admin'], <AuditLog />)} />
         <Route path="/admin/headsets" element={g(['admin'], <Headsets />)} />
-        <Route path="/admin/headsets/:id" element={<Navigate to="/admin/headsets" replace />} />
+        <Route path="/admin/headsets/:id" element={g(['admin'], <HeadsetDetail />)} />
+        <Route path="/admin/live/:studentId" element={g(['admin'], <LiveSessionView />)} />
         <Route path="/admin/settings" element={g(['admin'], <Settings />)} />
 
         {/* Student web — teachers reach these through Lesson Preview (?preview=1) */}
@@ -92,7 +97,7 @@ export default function App() {
         <Route path="/student/attempt/:id" element={g(['student'], <AttemptDetail />)} />
         <Route path="/student/catalog" element={g(['student', 'teacher'], <Catalog />)} />
         <Route path="/student/catalog/:id" element={g(['student', 'teacher'], <ComponentView />)} />
-        <Route path="/student/exploded" element={<Navigate to="/student/catalog" replace />} />
+        <Route path="/student/exploded" element={g(['student'], <ExplodedView />)} />
 
         {/* Platform */}
         <Route path="/platform" element={g(['platform'], <PlatformOverview />)} />

@@ -9,7 +9,7 @@ import { MachineView } from '@/components/training/MachineView'
 import { SpeakButton } from '@/components/training/Audio'
 import { ModuleShell, useModuleEnv } from '@/components/training/ModuleShell'
 import { ResultsView } from '@/components/training/ResultsView'
-import { drawQuiz, quizBankStore, quizSettingsFor, quizSettingsStore, studentsStore } from '@/data/stores'
+import { activeBank, bankStateStore, drawQuiz, quizBankStore, quizInProgressStore, quizSettingsFor, quizSettingsStore, studentsStore } from '@/data/stores'
 import type { Attempt, AttemptItem } from '@/data/mock'
 import { QUIZ_LENGTH, type QuizQuestion } from '@/data/content'
 import type { L } from '@/lib/i18n'
@@ -26,7 +26,8 @@ export default function FinalQuizModule() {
   const me = students.find((s) => s.id === env.studentId)
   const settings = quizSettingsFor(allSettings, me?.classId ?? '2a')
 
-  const [questions] = useState<QuizQuestion[]>(() => drawQuiz(bank, settings))
+  // Drawn from the questions ACTIVE for the student's class
+  const [questions] = useState<QuizQuestion[]>(() => drawQuiz(activeBank(bank, bankStateStore.get(), me?.classId ?? '2a'), settings))
   const [queue, setQueue] = useState<number[]>(() => questions.map((_, i) => i))
   const [answers, setAnswers] = useState<(number[] | null)[]>(() => questions.map(() => null))
   const [selected, setSelected] = useState<number[]>([])
@@ -34,6 +35,13 @@ export default function FinalQuizModule() {
   const [result, setResult] = useState<Omit<Attempt, 'id' | 'studentId'> | null>(null)
 
   const locked = !env.preview && me && me.finalQuiz !== 'Open'
+
+  // While an attempt is running the component catalogue is closed for this student
+  const sid = env.preview || locked ? undefined : env.studentId
+  useEffect(() => {
+    if (!sid) return
+    quizInProgressStore.set((p) => (p.includes(sid) ? p : [...p, sid]))
+  }, [sid])
 
   const finish = (ans: (number[] | null)[], status: 'completed' | 'abandoned') => {
     const items: AttemptItem[] = questions.map((q, i) => {
@@ -51,6 +59,7 @@ export default function FinalQuizModule() {
     const correct = items.filter((i) => i.correct).length
     const data = { correct, total: questions.length, score: Math.round((correct / questions.length) * 100), status, items }
     env.record(data)
+    quizInProgressStore.set((p) => p.filter((x) => x !== env.studentId))
     if (!env.preview && env.studentId) studentsStore.set((p) => p.map((s) => (s.id === env.studentId ? { ...s, finalQuiz: 'Completed' } : s)))
     return { ...data, module: 'finalQuiz' as const, date: new Date().toISOString(), device: env.device, durationSec: env.elapsed() }
   }
@@ -186,11 +195,11 @@ export default function FinalQuizModule() {
 
             <div className="grid-blueprint min-h-[260px] overflow-hidden rounded-2xl">
               {q.media?.kind === 'part' ? (
-                <MachineView key={q.id} highlight={[q.media.part]} showLabels={false} dimOthers />
+                <MachineView highlight={[q.media.part]} focus={q.media.part} showLabels={false} dimOthers wheelZoom={false} className="p-2" />
               ) : q.media?.kind === 'image' ? (
                 <img src={q.media.dataUrl} alt={q.media.name} className="h-full w-full bg-white object-contain" />
               ) : (
-                <MachineView key={q.id} showLabels={false} />
+                <MachineView showLabels={false} wheelZoom={false} className="p-2" />
               )}
             </div>
           </div>

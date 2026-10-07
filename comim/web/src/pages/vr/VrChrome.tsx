@@ -54,6 +54,7 @@ export function VrShell({
   menuItems = [],
   onLogoClick,
   onExit,
+  fit = false,
 }: {
   badge: string
   children: React.ReactNode
@@ -62,6 +63,8 @@ export function VrShell({
   onLogoClick?: () => void
   /** Shown as "Exit" in the menu — inside an exercise it opens the Exit choice */
   onExit?: () => void
+  /** Exercise screens: exactly the screen height, no page scroll */
+  fit?: boolean
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -75,7 +78,7 @@ export function VrShell({
   ]
 
   return (
-    <div className="grid-blueprint flex min-h-screen flex-col overflow-x-hidden text-white">
+    <div className={cn('grid-blueprint flex min-h-screen flex-col overflow-x-hidden text-white', fit && 'lg:h-dvh lg:min-h-0 lg:overflow-hidden')}>
       <VrStatusBar />
       <header className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-3 sm:px-5">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Info, Link2Off, Pencil, QrCode, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { AppShell } from '@/components/layout/AppShell'
@@ -18,6 +18,7 @@ type SortKey = 'id' | 'status' | 'classes' | 'lastSeen' | 'location'
 export function Headsets() {
   const { t } = useTranslation()
   const lang = useLang()
+  const navigate = useNavigate()
   const [params] = useSearchParams()
   const headsets = headsetsStore.use()
   const classes = classesStore.use()
@@ -79,8 +80,12 @@ export function Headsets() {
               </thead>
               <tbody>
                 {paged.slice.map((h) => (
-                  <tr key={h.id} className="border-b border-slate-100">
-                    <td className="px-6 py-3.5 font-semibold text-ink">{h.id}</td>
+                  <tr key={h.id} className="cursor-pointer border-b border-slate-100 hover:bg-slate-50" onClick={() => navigate(`/admin/headsets/${encodeURIComponent(h.id)}`)}>
+                    <td className="px-6 py-3.5">
+                      <Link to={`/admin/headsets/${encodeURIComponent(h.id)}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-ink hover:text-brand-600">
+                        {h.id}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3.5">
                       <Badge tone={h.statusKey === 'online' ? 'green' : 'gray'} dot>
                         {h.statusKey === 'online' ? t('common.connected') : h.statusKey === 'offline' ? t('common.offline') : t('headsets.unpaired')}
@@ -90,7 +95,7 @@ export function Headsets() {
                     <td className="px-4 py-3.5 text-muted">{h.classLabel || t('headsets.noClass')}</td>
                     <td className="px-4 py-3.5 text-muted">{fmtDateTime(h.lastSeen, lang)}</td>
                     <td className="px-4 py-3.5 text-muted">{h.location}</td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" onClick={() => setEditing(h)} aria-label={`${t('common.edit')} ${h.id}`}>
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -108,7 +113,7 @@ export function Headsets() {
   )
 }
 
-function HeadsetModal({ headset, onClose }: { headset: Headset; onClose: () => void }) {
+export function HeadsetModal({ headset, onClose }: { headset: Headset; onClose: () => void }) {
   const { t } = useTranslation()
   const loc = useLoc()
   const lang = useLang()
@@ -120,14 +125,26 @@ function HeadsetModal({ headset, onClose }: { headset: Headset; onClose: () => v
 
   const save = () => {
     headsetsStore.set((p) => p.map((h) => (h.id === headset.id ? { ...h, classIds, location } : h)))
-    addSchoolAudit({ author: user?.name ?? '', profile: 'admin', action: 'headsetUpdate', target: `${headset.id} → ${classIds.map((id) => id.toUpperCase()).join(', ') || '—'}`, screen: 'headsets' })
+    const codes = (ids: string[]) => ids.map((id) => classes.find((c) => c.id === id)?.name.split(' ')[0] ?? id.toUpperCase()).join(', ') || { code: 'none' }
+    addSchoolAudit({
+      author: user?.name ?? '',
+      profile: 'admin',
+      action: 'headsetUpdate',
+      target: `${headset.id} → ${classIds.map((id) => id.toUpperCase()).join(', ') || '—'}`,
+      ref: { kind: 'headset', id: headset.id, label: headset.id, sub: location },
+      changes: [
+        ...(codes(headset.classIds) !== codes(classIds) ? [{ field: 'assignedClasses', before: codes(headset.classIds), after: codes(classIds) }] : []),
+        ...(headset.location !== location ? [{ field: 'location', before: headset.location, after: location }] : []),
+      ],
+      screen: 'headsets',
+    })
     onClose()
   }
   const unpair = () => {
     headsetsStore.set((p) =>
       p.map((h) => (h.id === headset.id ? { ...h, paired: false, online: false, classIds: [], history: [...h.history, { date: new Date().toISOString(), event: { en: 'Unpaired', fr: 'Désappairé' } }] } : h)),
     )
-    addSchoolAudit({ author: user?.name ?? '', profile: 'admin', action: 'headsetUnpaired', target: headset.id, screen: 'headsets' })
+    addSchoolAudit({ author: user?.name ?? '', profile: 'admin', action: 'headsetUnpaired', target: headset.id, ref: { kind: 'headset', id: headset.id, label: headset.id, sub: headset.location }, changes: [{ field: 'pairing', before: { code: 'paired' }, after: { code: 'unpaired' } }], screen: 'headsets' })
     onClose()
   }
 

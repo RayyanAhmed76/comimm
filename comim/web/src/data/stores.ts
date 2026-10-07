@@ -6,6 +6,7 @@ import {
   defaultWeights,
   establishmentsSeed,
   headsetsSeed,
+  CURRENT_YEAR,
   platformAuditSeed,
   schoolAuditSeed,
   SCHOOL_NAME,
@@ -52,6 +53,61 @@ export const rubricStore = createStore('rubric', () => ({
 
 export const quizBankStore = createStore<QuizQuestion[]>('quiz-bank', () => comimQuestionBank)
 
+/**
+ * Where a question is active. Default questions (and the admin's school questions) are active
+ * everywhere unless disabled; a teacher's question is only active in the classes that opted in.
+ */
+export type BankState = {
+  /** Disabled for the whole school (Client Admin) */
+  schoolDisabled: string[]
+  /** Disabled for one class (its teacher, or the admin) */
+  classDisabled: Record<string, string[]>
+  /** Teacher questions activated in a class (opt-in) */
+  classEnabled: Record<string, string[]>
+}
+export const bankStateStore = createStore<BankState>('quiz-bank-state', () => ({ schoolDisabled: [], classDisabled: { '2a': ['fq18'] }, classEnabled: {} }))
+
+/** A quiz always draws 20 questions: a class can never have fewer ACTIVE questions. */
+export const MIN_ACTIVE = QUIZ_LENGTH
+
+const optIn = (q: QuizQuestion) => q.source === 'School' && q.authorRole !== 'admin'
+
+export function isActiveIn(q: QuizQuestion, st: BankState, classId: string) {
+  if (st.schoolDisabled.includes(q.id)) return false
+  if (st.classDisabled[classId]?.includes(q.id)) return false
+  return optIn(q) ? !!st.classEnabled[classId]?.includes(q.id) : true
+}
+
+export function activeBank(bank: QuizQuestion[], st: BankState, classId: string) {
+  return bank.filter((q) => isActiveIn(q, st, classId))
+}
+
+/** Classes whose quiz is drawn from the bank: current year, not archived. */
+export function quizClasses(classes: ClassWithTeachers[]) {
+  return classes.filter((c) => c.schoolYear === CURRENT_YEAR && !c.archived)
+}
+
+/** New state after switching `ids` on / off — for one class, or school-wide (`classId` = null). */
+export function withActivation(st: BankState, bank: QuizQuestion[], ids: string[], classId: string | null, active: boolean): BankState {
+  const without = (list: string[] = []) => list.filter((x) => !ids.includes(x))
+  const withIds = (list: string[] = []) => Array.from(new Set([...list, ...ids]))
+  if (classId == null) return { ...st, schoolDisabled: active ? without(st.schoolDisabled) : withIds(st.schoolDisabled) }
+  const opt = ids.filter((id) => bank.some((q) => q.id === id && optIn(q)))
+  return {
+    ...st,
+    classDisabled: { ...st.classDisabled, [classId]: active ? without(st.classDisabled[classId]) : withIds(st.classDisabled[classId]) },
+    classEnabled: {
+      ...st.classEnabled,
+      [classId]: active ? Array.from(new Set([...(st.classEnabled[classId] ?? []), ...opt])) : (st.classEnabled[classId] ?? []).filter((x) => !opt.includes(x)),
+    },
+  }
+}
+
+/** Classes that would fall under the minimum of active questions with this bank / state. */
+export function classesUnderMinimum(bank: QuizQuestion[], st: BankState, classes: ClassWithTeachers[]) {
+  return quizClasses(classes).filter((c) => activeBank(bank, st, c.id).length < MIN_ACTIVE)
+}
+
 export type QuizSettings = {
   mode: 'random' | 'fixed'
   fixedIds: string[]
@@ -73,13 +129,17 @@ export const quizSettingsStore = createStore<Record<string, QuizSettings>>('quiz
 export const settingsStore = createStore('settings', () => ({
   name: SCHOOL_NAME,
   contact: 'contact@imc-maritime.ma',
-  address: 'Port de Casablanca, Morocco',
+  address: 'Port de Casablanca, Maroc',
   logo: null as string | null,
   delegation: true,
   tracks: TRACKS,
 }))
 
 export const notificationsReadStore = createStore<string[]>('notifications-read', () => [])
+/** Students with a Final Quiz attempt in progress — the catalogue is closed meanwhile. */
+export const quizInProgressStore = createStore<string[]>('quiz-in-progress', () => [])
+/** Side menu open / closed, per user (localStorage = per device). */
+export const sidebarStore = createStore<Record<string, boolean>>('sidebar-collapsed', () => ({}))
 export const vrOnboardedStore = createStore<string[]>('vr-onboarded', () => [])
 export const tourCompletedStore = createStore<string[]>('tour-completed', () => ['s-yb'])
 
@@ -169,7 +229,10 @@ export function quizSettingsFor(all: Record<string, QuizSettings>, classId: stri
   return all[classId] ?? defaultQuizSettings()
 }
 
-/** Draws the 20 questions of a quiz from the question bank, guaranteeing ≥ 5 Safety questions. */
+/**
+ * Draws the 20 questions of a quiz from the ACTIVE questions of the class, with up to
+ * 5 Safety questions when available (the Safety minimum never blocks the quiz).
+ */
 export function drawQuiz(bank: QuizQuestion[], settings: QuizSettings): QuizQuestion[] {
   if (settings.mode === 'fixed') {
     const picked = settings.fixedIds.map((id) => bank.find((q) => q.id === id)).filter(Boolean) as QuizQuestion[]

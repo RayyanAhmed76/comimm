@@ -65,12 +65,15 @@ export interface Teacher {
   initials: string
   email: string
   classIds: string[]
+  /** Deactivated accounts keep their history but can no longer sign in */
+  active?: boolean
+  lastLogin?: string
 }
 
 export const teachers: Teacher[] = [
-  { id: 'u-mf', ...person('Mounia', 'Ferhat'), email: 'm.ferhat@imc-maritime.ma', classIds: ['2a', '2b', '3a', '1a-25', '2c-25'] },
-  { id: 'u-ka', ...person('Karim', 'Alaoui'), email: 'k.alaoui@imc-maritime.ma', classIds: ['3a', '3b'] },
-  { id: 'u-ls', ...person('Leila', 'Sbai'), email: 'l.sbai@imc-maritime.ma', classIds: [] },
+  { id: 'u-mf', ...person('Mounia', 'Ferhat'), email: 'm.ferhat@imc-maritime.ma', classIds: ['2a', '2b', '3a', '1a-25', '2c-25'], lastLogin: '2026-09-17T08:05:00' },
+  { id: 'u-ka', ...person('Karim', 'Alaoui'), email: 'k.alaoui@imc-maritime.ma', classIds: ['3a', '3b'], lastLogin: '2026-09-16T14:30:00' },
+  { id: 'u-ls', ...person('Leila', 'Sbai'), email: 'l.sbai@imc-maritime.ma', classIds: [], lastLogin: '2026-09-03T09:00:00' },
 ]
 
 export interface ClassRow {
@@ -78,6 +81,8 @@ export interface ClassRow {
   name: string
   track: string
   schoolYear: string
+  /** Archived / closed at the end of the school year */
+  archived?: boolean
 }
 
 export const classesSeed: ClassRow[] = [
@@ -99,6 +104,7 @@ export interface Student {
   email: string
   finalQuiz: 'Locked' | 'Open' | 'Completed'
   lastActivity: string
+  active?: boolean
 }
 
 const roster: Record<string, [string, string, string][]> = {
@@ -152,7 +158,7 @@ export interface AttemptItem {
   expected?: L
   correct: boolean
   explanation?: L
-  kind?: 'name' | 'function'
+  kind?: 'name' | 'function' | 'diagnosis'
   part?: PartId
   errors?: number
 }
@@ -340,12 +346,19 @@ export interface LiveSession {
   exercise: ModuleId
   mode: 'Headset' | 'Web'
   minutes: number
+  classId: string
+  headsetId?: string
+  /** Live metrics */
+  step: number
+  totalSteps: number
+  errors: number
+  hints: number
 }
 
 export const liveSessions: LiveSession[] = [
-  { id: 'ls1', studentId: 's-kr', studentName: 'Karim Raji', initials: 'KR', className: '2A — Marine Mechanics', exercise: 'startup', mode: 'Headset', minutes: 14 },
-  { id: 'ls2', studentId: 's-na', studentName: 'Nada Amrani', initials: 'NA', className: '2A — Marine Mechanics', exercise: 'tour', mode: 'Web', minutes: 6 },
-  { id: 'ls3', studentId: 's-hb', studentName: 'Hiba Bensouda', initials: 'HB', className: '3A — Electrotechnics', exercise: 'repair', mode: 'Headset', minutes: 2 },
+  { id: 'ls1', studentId: 's-kr', studentName: 'Karim Raji', initials: 'KR', className: '2A — Marine Mechanics', classId: '2a', exercise: 'startup', mode: 'Headset', headsetId: '#A-04', minutes: 14, step: 7, totalSteps: 13, errors: 3, hints: 1 },
+  { id: 'ls2', studentId: 's-na', studentName: 'Nada Amrani', initials: 'NA', className: '2A — Marine Mechanics', classId: '2a', exercise: 'tour', mode: 'Web', minutes: 6, step: 4, totalSteps: 9, errors: 0, hints: 0 },
+  { id: 'ls3', studentId: 's-hb', studentName: 'Hiba Bensouda', initials: 'HB', className: '3A — Electrotechnics', classId: '3a', exercise: 'repair', mode: 'Headset', headsetId: '#A-06', minutes: 2, step: 2, totalSteps: 10, errors: 1, hints: 0 },
 ]
 
 /* ------------------------------- Audit ------------------------------ */
@@ -353,23 +366,39 @@ export const liveSessions: LiveSession[] = [
 export type AuditAction =
   | 'scoreAdjustment'
   | 'finalQuizOpened'
+  | 'quizRetryAllowed'
   | 'userCreation'
   | 'userUpdate'
+  | 'userDeactivated'
+  | 'userReactivated'
   | 'classCreation'
   | 'classUpdate'
   | 'classChange'
+  | 'classArchived'
+  | 'classTransferred'
   | 'sessionViewing'
   | 'assignmentCreated'
   | 'assignmentUpdated'
   | 'headsetUpdate'
   | 'headsetUnpaired'
+  | 'headsetCodeRegenerated'
   | 'settingsUpdate'
+  | 'trackAdded'
+  | 'trackRemoved'
+  | 'delegationToggled'
+  | 'questionCreated'
+  | 'questionUpdated'
+  | 'questionDuplicated'
+  | 'questionDisabled'
+  | 'questionEnabled'
+  | 'questionDeleted'
   | 'establishmentCreation'
   | 'establishmentSuspension'
   | 'establishmentReactivation'
   | 'licenseChange'
   | 'featureActivation'
   | 'featureDeactivation'
+  | 'reportRun'
 
 export type AuditProfile = 'teacher' | 'admin' | 'platform' | 'student'
 export type AuditScreen =
@@ -380,8 +409,30 @@ export type AuditScreen =
   | 'liveView'
   | 'headsets'
   | 'settings'
+  | 'questionBank'
   | 'establishments'
   | 'licenses'
+  | 'usage'
+
+/**
+ * A stored audit value: plain data (a name, a number), a bilingual label, a date, or a
+ * CODE translated at display time (`audit.values.<code>`) — never a sentence in one language.
+ */
+export type AuditVal = string | L | { code: string; n?: number } | { date: string }
+/** `field` is a code (`audit.fields.<field>`). */
+export interface AuditChange {
+  field: string
+  before?: AuditVal
+  after?: AuditVal
+}
+export type AuditRefKind = 'student' | 'teacher' | 'class' | 'headset' | 'question' | 'setting' | 'establishment' | 'report'
+/** The entity the action applies to — rendered as a link to its page. */
+export interface AuditRef {
+  kind: AuditRefKind
+  id?: string
+  label: AuditVal
+  sub?: AuditVal
+}
 
 export interface AuditEntry {
   id: string
@@ -389,36 +440,48 @@ export interface AuditEntry {
   author: string
   profile: AuditProfile
   action: AuditAction
+  /** Plain-text target (search, CSV, entries without a structured target) */
   target: string
+  ref?: AuditRef
+  changes?: AuditChange[]
   screen: AuditScreen
   establishmentId: string
   origin: 'COMIM' | 'School'
   justification?: string
 }
 
+const none: AuditVal = { code: 'none' }
+const school = { establishmentId: 'imc', origin: 'School' as const }
+
 export const schoolAuditSeed: AuditEntry[] = [
-  { id: 'au1', date: '2026-09-17T09:12:00', author: 'Mounia Ferhat', profile: 'teacher', action: 'scoreAdjustment', target: 'Y. Bakkali · Final Quiz: 75% → 80%', screen: 'studentProfile', establishmentId: 'imc', origin: 'School', justification: 'Question 7 ambiguous in FR — accepted both answers after review with the class.' },
-  { id: 'au2', date: '2026-09-16T16:40:00', author: 'Mounia Ferhat', profile: 'teacher', action: 'finalQuizOpened', target: 'Class 2A · N. Amrani', screen: 'classDetail', establishmentId: 'imc', origin: 'School' },
-  { id: 'au3', date: '2026-09-15T11:03:00', author: 'Souhail Ouabi', profile: 'admin', action: 'userCreation', target: 'Student · I. Lahlou (2A)', screen: 'users', establishmentId: 'imc', origin: 'School' },
-  { id: 'au4', date: '2026-09-14T10:22:00', author: 'Karim Alaoui', profile: 'teacher', action: 'sessionViewing', target: 'Live session · H. Idrissi (3A)', screen: 'liveView', establishmentId: 'imc', origin: 'School' },
-  { id: 'au5', date: '2026-09-12T08:30:00', author: 'Mounia Ferhat', profile: 'teacher', action: 'assignmentCreated', target: '2A · Repair · 4 students', screen: 'classDetail', establishmentId: 'imc', origin: 'School' },
-  { id: 'au6', date: '2026-09-10T15:00:00', author: 'Souhail Ouabi', profile: 'admin', action: 'headsetUpdate', target: '#A-02 → 2A, 2B', screen: 'headsets', establishmentId: 'imc', origin: 'School' },
-  { id: 'au7', date: '2026-09-05T10:12:00', author: 'Souhail Ouabi', profile: 'admin', action: 'userCreation', target: 'Student · Y. Bakkali (2A)', screen: 'users', establishmentId: 'imc', origin: 'School' },
-  { id: 'au8', date: '2026-09-03T16:40:00', author: 'Mounia Ferhat', profile: 'teacher', action: 'scoreAdjustment', target: 'N. Amrani · Startup Procedure: 70% → 74%', screen: 'studentProfile', establishmentId: 'imc', origin: 'School', justification: 'Step 6 validated orally during the practical session.' },
-  { id: 'au9', date: '2026-09-02T08:55:00', author: 'Souhail Ouabi', profile: 'admin', action: 'classCreation', target: '3B — Boilermaking, 2026–2027', screen: 'classes', establishmentId: 'imc', origin: 'School' },
-  { id: 'au10', date: '2026-09-01T09:30:00', author: 'Souhail Ouabi', profile: 'admin', action: 'settingsUpdate', target: 'Tracks: + Boilermaking', screen: 'settings', establishmentId: 'imc', origin: 'School' },
-  { id: 'au11', date: '2026-08-29T14:10:00', author: 'Souhail Ouabi', profile: 'admin', action: 'userCreation', target: 'Teacher · L. Sbai', screen: 'users', establishmentId: 'imc', origin: 'School' },
-  { id: 'au12', date: '2026-06-12T11:00:00', author: 'Mounia Ferhat', profile: 'teacher', action: 'finalQuizOpened', target: 'Class 1A · whole class', screen: 'classDetail', establishmentId: 'imc', origin: 'School' },
+  { id: 'au1', date: '2026-09-17T09:12:00', author: 'Mounia Ferhat', profile: 'teacher', action: 'scoreAdjustment', target: 'Y. Bakkali · Final Quiz: 75% → 80%', ref: { kind: 'student', id: 's-yb', label: 'Yassine Bakkali', sub: { en: 'Final Quiz', fr: 'Quiz final' } }, changes: [{ field: 'score', before: '75 %', after: '80 %' }], screen: 'studentProfile', ...school, justification: 'Question 7 ambiguë en FR — les deux réponses acceptées après revue avec la classe.' },
+  { id: 'au2', date: '2026-09-16T16:40:00', author: 'Mounia Ferhat', profile: 'teacher', action: 'finalQuizOpened', target: 'Class 2A · N. Amrani', ref: { kind: 'student', id: 's-na', label: 'Nada Amrani', sub: '2A' }, changes: [{ field: 'quizStatus', before: { code: 'quizNotOpen' }, after: { code: 'quizOpen' } }], screen: 'classDetail', ...school },
+  { id: 'au13', date: '2026-09-15T11:05:00', author: 'Souhail Ouabi', profile: 'admin', action: 'userUpdate', target: 'Student · K. Alami (2B)', ref: { kind: 'student', id: 's-ka', label: 'Kenza Alami', sub: { code: 'student' } }, changes: [{ field: 'class', before: '2A', after: '2B' }, { field: 'track', before: { code: 'track.Mechanics' }, after: { code: 'track.Deck Officer' } }], screen: 'users', ...school },
+  { id: 'au3', date: '2026-09-15T11:03:00', author: 'Souhail Ouabi', profile: 'admin', action: 'userCreation', target: 'Student · I. Lahlou (2A)', ref: { kind: 'student', id: 's-il', label: 'Ikram Lahlou', sub: { code: 'student' } }, changes: [{ field: 'class', before: none, after: '2A' }], screen: 'users', ...school },
+  { id: 'au4', date: '2026-09-14T10:22:00', author: 'Karim Alaoui', profile: 'teacher', action: 'sessionViewing', target: 'Live session · H. Idrissi (3A)', ref: { kind: 'student', id: 's-hi', label: 'Hamid Idrissi', sub: '3A' }, screen: 'liveView', ...school },
+  { id: 'au14', date: '2026-09-12T14:30:00', author: 'Souhail Ouabi', profile: 'admin', action: 'headsetUpdate', target: '#A-05 → —', ref: { kind: 'headset', id: '#A-05', label: '#A-05', sub: 'Storage' }, changes: [{ field: 'assignedClasses', before: '2A', after: none }, { field: 'location', before: 'VR Room · Station 5', after: 'Storage' }], screen: 'headsets', ...school },
+  { id: 'au5', date: '2026-09-12T08:30:00', author: 'Mounia Ferhat', profile: 'teacher', action: 'assignmentCreated', target: '2A · Repair · 4 students', ref: { kind: 'class', id: '2a', label: '2A', sub: { en: 'Repair', fr: 'Réparation' } }, changes: [{ field: 'target', before: none, after: { code: 'nStudents', n: 4 } }, { field: 'dueDate', before: none, after: { date: '2026-09-22' } }], screen: 'classDetail', ...school },
+  { id: 'au15', date: '2026-09-10T10:12:00', author: 'Mounia Ferhat', profile: 'teacher', action: 'questionDisabled', target: 'fq18 · 2A', ref: { kind: 'question', id: 'fq18', label: { en: 'What is the last step of the startup?', fr: 'Quelle est la dernière étape du démarrage ?' }, sub: '2A' }, changes: [{ field: 'status', before: { code: 'active' }, after: { code: 'disabled' } }], screen: 'questionBank', ...school },
+  { id: 'au6', date: '2026-09-10T15:00:00', author: 'Souhail Ouabi', profile: 'admin', action: 'headsetUpdate', target: '#A-02 → 2A, 2B', ref: { kind: 'headset', id: '#A-02', label: '#A-02', sub: 'VR Room · Station 2' }, changes: [{ field: 'assignedClasses', before: '2A', after: '2A, 2B' }], screen: 'headsets', ...school },
+  { id: 'au7', date: '2026-09-05T10:12:00', author: 'Souhail Ouabi', profile: 'admin', action: 'userCreation', target: 'Student · Y. Bakkali (2A)', ref: { kind: 'student', id: 's-yb', label: 'Yassine Bakkali', sub: { code: 'student' } }, changes: [{ field: 'class', before: none, after: '2A' }], screen: 'users', ...school },
+  { id: 'au8', date: '2026-09-03T16:40:00', author: 'Mounia Ferhat', profile: 'teacher', action: 'scoreAdjustment', target: 'N. Amrani · Startup Procedure: 70% → 74%', ref: { kind: 'student', id: 's-na', label: 'Nada Amrani', sub: { en: 'Startup Procedure', fr: 'Procédure de démarrage' } }, changes: [{ field: 'score', before: '70 %', after: '74 %' }], screen: 'studentProfile', ...school, justification: 'Étape 6 validée à l’oral pendant la séance pratique.' },
+  { id: 'au16', date: '2026-09-02T09:44:00', author: 'Souhail Ouabi', profile: 'admin', action: 'delegationToggled', target: 'Delegation', ref: { kind: 'setting', label: { code: 'delegation' }, sub: { code: 'settings' } }, changes: [{ field: 'delegation', before: { code: 'disabled' }, after: { code: 'enabled' } }], screen: 'settings', ...school },
+  { id: 'au9', date: '2026-09-02T08:55:00', author: 'Souhail Ouabi', profile: 'admin', action: 'classCreation', target: '3B — Boilermaking, 2026–2027', ref: { kind: 'class', id: '3b', label: '3B', sub: '2026–2027' }, changes: [{ field: 'track', before: none, after: { code: 'track.Boilermaking' } }], screen: 'classes', ...school },
+  { id: 'au10', date: '2026-09-01T09:30:00', author: 'Souhail Ouabi', profile: 'admin', action: 'trackAdded', target: 'Tracks: + Boilermaking', ref: { kind: 'setting', label: { code: 'tracks' }, sub: { code: 'settings' } }, changes: [{ field: 'track', before: none, after: { code: 'track.Boilermaking' } }], screen: 'settings', ...school },
+  { id: 'au11', date: '2026-08-29T14:10:00', author: 'Souhail Ouabi', profile: 'admin', action: 'userCreation', target: 'Teacher · L. Sbai', ref: { kind: 'teacher', id: 'u-ls', label: 'Leila Sbai', sub: { code: 'teacher' } }, screen: 'users', ...school },
+  { id: 'au12', date: '2026-06-12T11:00:00', author: 'Mounia Ferhat', profile: 'teacher', action: 'finalQuizOpened', target: 'Class 1A · whole class', ref: { kind: 'class', id: '1a-25', label: '1A', sub: { code: 'wholeClass' } }, changes: [{ field: 'quizStatus', before: { code: 'quizNotOpen' }, after: { code: 'quizOpen' } }], screen: 'classDetail', ...school },
 ]
 
+const est = (id: string, label: string, sub?: AuditVal): AuditRef => ({ kind: 'establishment', id, label, sub })
+
 export const platformAuditSeed: AuditEntry[] = [
-  { id: 'pa1', date: '2026-09-17T08:30:00', author: 'Rania Amrani', profile: 'platform', action: 'establishmentSuspension', target: 'CFA Maritime de Safi', screen: 'establishments', establishmentId: 'cfa', origin: 'COMIM' },
-  { id: 'pa2', date: '2026-09-12T16:45:00', author: 'Rania Amrani', profile: 'platform', action: 'licenseChange', target: "Lycée Maritime d'Agadir — Discovery → Establishment", screen: 'licenses', establishmentId: 'lma', origin: 'COMIM' },
-  { id: 'pa3', date: '2026-09-12T11:20:00', author: 'Fatima Zahra Idrissi', profile: 'admin', action: 'userCreation', target: "Teacher · K. Tazi", screen: 'users', establishmentId: 'lma', origin: 'School' },
-  { id: 'pa4', date: '2026-09-10T15:02:00', author: 'Rania Amrani', profile: 'platform', action: 'licenseChange', target: 'Institut Maritime de Casablanca — seats 150 → 180', screen: 'licenses', establishmentId: 'imc', origin: 'COMIM' },
-  { id: 'pa5', date: '2026-09-02T09:44:00', author: 'Youssef Kabbaj', profile: 'platform', action: 'establishmentCreation', target: 'Institut Maritime de Casablanca', screen: 'establishments', establishmentId: 'imc', origin: 'COMIM' },
-  { id: 'pa6', date: '2026-08-28T11:10:00', author: 'Rania Amrani', profile: 'platform', action: 'featureActivation', target: 'Institut Maritime de Casablanca — Exploded View', screen: 'licenses', establishmentId: 'imc', origin: 'COMIM' },
-  { id: 'pa7', date: '2026-08-20T10:00:00', author: 'Rania Amrani', profile: 'platform', action: 'establishmentCreation', target: 'Institut Maritime de Tanger', screen: 'establishments', establishmentId: 'imt', origin: 'COMIM' },
+  { id: 'pa1', date: '2026-09-17T08:30:00', author: 'Rania Amrani', profile: 'platform', action: 'establishmentSuspension', target: 'CFA Maritime de Safi', ref: est('cfa', 'CFA Maritime de Safi', 'Safi'), changes: [{ field: 'status', before: { code: 'active' }, after: { code: 'suspended' } }], screen: 'establishments', establishmentId: 'cfa', origin: 'COMIM' },
+  { id: 'pa2', date: '2026-09-12T16:45:00', author: 'Rania Amrani', profile: 'platform', action: 'licenseChange', target: "Lycée Maritime d'Agadir — Discovery → Establishment", ref: est('lma', "Lycée Maritime d'Agadir", { code: 'licence' }), changes: [{ field: 'plan', before: 'Discovery', after: 'Establishment' }], screen: 'licenses', establishmentId: 'lma', origin: 'COMIM' },
+  { id: 'pa3', date: '2026-09-12T11:20:00', author: 'Fatima Zahra Idrissi', profile: 'admin', action: 'userCreation', target: 'Teacher · K. Tazi', ref: { kind: 'teacher', label: 'Khalid Tazi', sub: { code: 'teacher' } }, screen: 'users', establishmentId: 'lma', origin: 'School' },
+  { id: 'pa4', date: '2026-09-10T15:02:00', author: 'Rania Amrani', profile: 'platform', action: 'licenseChange', target: 'Institut Maritime de Casablanca — seats 150 → 180', ref: est('imc', SCHOOL_NAME, { code: 'licence' }), changes: [{ field: 'seats', before: '150', after: '180' }, { field: 'expiry', before: { date: '2026-08-31' }, after: { date: '2027-08-31' } }], screen: 'licenses', establishmentId: 'imc', origin: 'COMIM' },
+  { id: 'pa5', date: '2026-09-02T09:44:00', author: 'Youssef Kabbaj', profile: 'platform', action: 'establishmentCreation', target: 'Institut Maritime de Casablanca', ref: est('imc', SCHOOL_NAME, 'Casablanca'), screen: 'establishments', establishmentId: 'imc', origin: 'COMIM' },
+  { id: 'pa6', date: '2026-08-28T11:10:00', author: 'Rania Amrani', profile: 'platform', action: 'featureActivation', target: 'Institut Maritime de Casablanca — Exploded View', ref: est('imc', SCHOOL_NAME, { code: 'licence' }), changes: [{ field: 'feature.exploded', before: { code: 'disabled' }, after: { code: 'enabled' } }], screen: 'licenses', establishmentId: 'imc', origin: 'COMIM' },
+  { id: 'pa7', date: '2026-08-20T10:00:00', author: 'Rania Amrani', profile: 'platform', action: 'establishmentCreation', target: 'Institut Maritime de Tanger', ref: est('imt', 'Institut Maritime de Tanger', 'Tanger'), screen: 'establishments', establishmentId: 'imt', origin: 'COMIM' },
 ]
 
 /* --------------------------- Establishments ------------------------- */

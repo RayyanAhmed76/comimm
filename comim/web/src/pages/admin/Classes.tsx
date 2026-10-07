@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Pencil, Plus, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { AppShell } from '@/components/layout/AppShell'
@@ -11,6 +11,8 @@ import { Tooltip } from '@/components/ui/InfoTip'
 import { Field, Modal, fieldClass } from '@/components/ui/Modal'
 import { Pagination, SortTh, inputSm, thRow, usePaged, useSort } from '@/components/ui/Table'
 import { useAuth } from '@/context/AuthContext'
+import { useLang } from '@/lib/i18n'
+import { classCode, classLabel, trackLabel } from '@/lib/labels'
 import { uid } from '@/lib/store'
 import { CURRENT_YEAR, SCHOOL_YEARS } from '@/data/mock'
 import {
@@ -29,8 +31,12 @@ import { statusKey, statusTone } from '@/pages/teacher/MyClasses'
 
 export function Classes() {
   const { t } = useTranslation()
+  const lang = useLang()
+  const navigate = useNavigate()
   const [params] = useSearchParams()
   const classes = classesStore.use()
+  // Classes transferred to a following year add that year to the selector
+  const years = Array.from(new Set([...SCHOOL_YEARS, ...classesStore.get().map((c) => c.schoolYear)])).sort().reverse()
   const students = studentsStore.use()
   const assignments = assignmentsStore.use()
   const attempts = attemptsStore.use()
@@ -78,7 +84,7 @@ export function Classes() {
               <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('common.search')} className={`${inputSm} pl-9`} />
             </div>
             <select value={year} onChange={(e) => setYear(e.target.value)} className={inputSm} aria-label={t('admin.schoolYear')}>
-              {SCHOOL_YEARS.map((y) => (
+              {years.map((y) => (
                 <option key={y}>{y}</option>
               ))}
             </select>
@@ -98,9 +104,18 @@ export function Classes() {
               </thead>
               <tbody>
                 {paged.slice.map((cls) => (
-                  <tr key={cls.id} className="border-b border-slate-100">
-                    <td className="px-6 py-3.5 font-semibold text-ink">{cls.name}</td>
-                    <td className="px-4 py-3.5 text-muted">{cls.track}</td>
+                  <tr key={cls.id} className="cursor-pointer border-b border-slate-100 hover:bg-slate-50" onClick={() => navigate(`/admin/classes/${cls.id}`)}>
+                    <td className="px-6 py-3.5">
+                      <Link to={`/admin/classes/${cls.id}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-ink hover:text-brand-600">
+                        {classLabel(cls.name, lang)}
+                      </Link>
+                      {cls.archived && (
+                        <Badge tone="gray" className="ml-2">
+                          {t('detail.archived')}
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-muted">{trackLabel(cls.track, lang)}</td>
                     <td className="px-4 py-3.5 text-muted">{cls.teacherNames || '—'}</td>
                     <td className="px-4 py-3.5 text-muted">{cls.headcount}</td>
                     <td className="px-4 py-3.5">
@@ -116,7 +131,7 @@ export function Classes() {
                         </Badge>
                       </Tooltip>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" onClick={() => setEditing(cls)} aria-label={`${t('common.edit')} ${cls.name}`}>
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -141,8 +156,9 @@ export function Classes() {
   )
 }
 
-function ClassModal({ initial, onClose }: { initial: ClassWithTeachers | null; onClose: () => void }) {
+export function ClassModal({ initial, onClose }: { initial: ClassWithTeachers | null; onClose: () => void }) {
   const { t } = useTranslation()
+  const lang = useLang()
   const { user } = useAuth()
   const settings = settingsStore.use()
   const teachers = teachersStore.use()
@@ -152,10 +168,24 @@ function ClassModal({ initial, onClose }: { initial: ClassWithTeachers | null; o
   const [year, setYear] = useState(initial?.schoolYear ?? CURRENT_YEAR)
 
   const save = () => {
-    const next: ClassWithTeachers = { id: initial?.id ?? uid('c'), name: name.trim(), track, teacherIds, schoolYear: year }
+    const next: ClassWithTeachers = { ...initial, id: initial?.id ?? uid('c'), name: name.trim(), track, teacherIds, schoolYear: year }
+    const names = (ids: string[]) => ids.map((x) => teachers.find((tc) => tc.id === x)?.name).filter(Boolean).join(', ') || { code: 'none' }
     classesStore.set((p) => (initial ? p.map((c) => (c.id === next.id ? next : c)) : [...p, next]))
     teachersStore.set((p) => p.map((tc) => ({ ...tc, classIds: teacherIds.includes(tc.id) ? Array.from(new Set([...tc.classIds, next.id])) : tc.classIds.filter((x) => x !== next.id) })))
-    addSchoolAudit({ author: user?.name ?? '', profile: 'admin', action: initial ? 'classUpdate' : 'classCreation', target: `${next.name}, ${year}`, screen: 'classes' })
+    addSchoolAudit({
+      author: user?.name ?? '',
+      profile: 'admin',
+      action: initial ? 'classUpdate' : 'classCreation',
+      target: `${next.name}, ${year}`,
+      ref: { kind: 'class', id: next.id, label: classCode(next.name), sub: year },
+      changes: [
+        ...(initial && initial.name !== next.name ? [{ field: 'name', before: initial.name, after: next.name }] : []),
+        ...(initial?.track !== track ? [{ field: 'track', before: initial ? { code: `track.${initial.track}` } : { code: 'none' }, after: { code: `track.${track}` } }] : []),
+        ...(initial && initial.schoolYear !== year ? [{ field: 'schoolYear', before: initial.schoolYear, after: year }] : []),
+        ...(names(initial?.teacherIds ?? []) !== names(teacherIds) ? [{ field: 'teachers', before: names(initial?.teacherIds ?? []), after: names(teacherIds) }] : []),
+      ],
+      screen: 'classes',
+    })
     onClose()
   }
 
@@ -183,7 +213,9 @@ function ClassModal({ initial, onClose }: { initial: ClassWithTeachers | null; o
           <Field label={t('teacher.track')}>
             <select value={track} onChange={(e) => setTrack(e.target.value)} className={fieldClass}>
               {settings.tracks.map((tr) => (
-                <option key={tr}>{tr}</option>
+                <option key={tr} value={tr}>
+                  {trackLabel(tr, lang)}
+                </option>
               ))}
             </select>
           </Field>

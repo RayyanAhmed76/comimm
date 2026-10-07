@@ -17,7 +17,7 @@ export function LessonPreview() {
     { title: loc(moduleNames.startup), description: t('student.startupDesc'), icon: PlaySquare, to: '/student/startup?preview=1' },
     { title: loc(moduleNames.repair), description: t('student.repairDesc'), icon: Wrench, to: '/student/repair?preview=1' },
     { title: loc(moduleNames.finalQuiz), description: t('student.finalQuizDesc'), icon: ClipboardCheck, to: '/student/final-quiz?preview=1' },
-    { title: t('student.catalog'), description: t('student.catalogDesc'), icon: Boxes, to: '/student/catalog' },
+    { title: t('student.catalog'), description: t('student.catalogDesc'), icon: Boxes, to: '/student/catalog?preview=1' },
   ]
 
   return (

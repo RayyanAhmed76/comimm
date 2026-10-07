@@ -33,9 +33,17 @@ export const COURSE_NAME: L = { en: 'Freshwater generator', fr: 'Générateur d�
 
 /* ----------------------------- Catalogue ---------------------------- */
 
-export type Component = { id: string; part: PartId; name: L; definition: L; hint: L }
+export type ComponentType = 'exchanger' | 'valve' | 'pump' | 'instrument' | 'other'
+export const COMPONENT_TYPES: ComponentType[] = ['exchanger', 'valve', 'pump', 'instrument', 'other']
 
-export const catalogue: Component[] = [
+/**
+ * `hint` is only used as the Identification hint. `note` is the neutral technical note shown
+ * in the catalogue (what it is, where, normal range) — no procedure order, no fault cause.
+ */
+type BaseComponent = { id: string; part: PartId; name: L; definition: L; hint: L }
+export type Component = BaseComponent & { type: ComponentType; note: L }
+
+const baseCatalogue: BaseComponent[] = [
   { id: 'c01', part: 'separator', name: { en: 'Separator vessel', fr: 'Séparateur (corps)' }, definition: { en: 'Main shell where seawater evaporates and vapour separates from brine under vacuum.', fr: 'Corps principal où l’eau de mer s’évapore et où la vapeur se sépare de la saumure sous vide.' }, hint: { en: 'The largest volume of the unit.', fr: 'Le plus grand volume de l’appareil.' } },
   { id: 'c02', part: 'evaporator', name: { en: 'Evaporator plate pack', fr: 'Plaques de l’évaporateur' }, definition: { en: 'Heated plates where seawater turns into vapour.', fr: 'Plaques chauffées où l’eau de mer se transforme en vapeur.' }, hint: { en: 'Heated by the engine jacket water — hot side of the unit.', fr: 'Chauffées par l’eau de refroidissement moteur — côté chaud de l’appareil.' } },
   { id: 'c03', part: 'condenser', name: { en: 'Condenser plate pack', fr: 'Plaques du condenseur' }, definition: { en: 'Cooled plates where the vapour condenses back into fresh water.', fr: 'Plaques refroidies où la vapeur se condense en eau douce.' }, hint: { en: 'Cooled by seawater — opposite temperature direction to the evaporator.', fr: 'Refroidies par l’eau de mer — sens de température opposé à l’évaporateur.' } },
@@ -70,6 +78,46 @@ export const catalogue: Component[] = [
   { id: 'c32', part: 'logbook', name: { en: 'Engine-room logbook', fr: 'Journal machine' }, definition: { en: 'Record of the operating parameters at each startup.', fr: 'Registre des paramètres de fonctionnement à chaque démarrage.' }, hint: { en: 'Filled in at the end of the startup.', fr: 'Renseigné à la fin du démarrage.' } },
 ]
 
+const catalogueMeta: Record<string, [ComponentType, string, string]> = {
+  c01: ['exchanger', 'Central shell of the unit; works under vacuum (normal ≥ 90 %).', 'Corps central de l’appareil ; fonctionne sous vide (normal ≥ 90 %).'],
+  c02: ['exchanger', 'Lower plate pack, hot side; jacket water at about 70–80 °C.', 'Paquet de plaques inférieur, côté chaud ; eau moteur à environ 70–80 °C.'],
+  c03: ['exchanger', 'Upper plate pack, cold side; cooled by seawater.', 'Paquet de plaques supérieur, côté froid ; refroidi par l’eau de mer.'],
+  c04: ['exchanger', 'Mesh fitted between the evaporator and the condenser, in the vapour path.', 'Grille montée entre l’évaporateur et le condenseur, sur le trajet de la vapeur.'],
+  c05: ['pump', 'On the right of the shell; driven by seawater at 3.5–4.5 bar.', 'À droite du corps ; entraîné par l’eau de mer à 3,5–4,5 bar.'],
+  c06: ['pump', 'Inside the ejector body, behind the inspection cover; bronze, Ø 12 mm.', 'Dans le corps de l’éjecteur, derrière le couvercle de visite ; bronze, Ø 12 mm.'],
+  c07: ['other', 'On the ejector body; held by 4 × M12 bolts (25 N·m).', 'Sur le corps de l’éjecteur ; maintenu par 4 boulons M12 (25 N·m).'],
+  c08: ['pump', 'Below the ejector, on the seawater line; delivers 3.5–4.5 bar.', 'Sous l’éjecteur, sur la ligne d’eau de mer ; délivre 3,5–4,5 bar.'],
+  c09: ['valve', 'On the seawater line, between the sea chest and the ejector pump.', 'Sur la ligne d’eau de mer, entre la prise d’eau et la pompe de l’éjecteur.'],
+  c10: ['valve', 'On the seawater line, just downstream of the ejector pump.', 'Sur la ligne d’eau de mer, juste en aval de la pompe de l’éjecteur.'],
+  c11: ['valve', 'At the end of the ejector outlet line, at the ship’s side.', 'Au bout de la ligne de sortie de l’éjecteur, au bordé.'],
+  c12: ['valve', 'On top of the separator shell.', 'En haut du corps du séparateur.'],
+  c13: ['instrument', 'On top of the separator; normal reading ≥ 90 %.', 'En haut du séparateur ; valeur normale ≥ 90 %.'],
+  c14: ['valve', 'On the hot-water line, at the evaporator inlet.', 'Sur la ligne d’eau chaude, à l’entrée de l’évaporateur.'],
+  c15: ['valve', 'On the hot-water line, at the evaporator outlet.', 'Sur la ligne d’eau chaude, à la sortie de l’évaporateur.'],
+  c16: ['valve', 'Between the jacket water inlet and outlet lines.', 'Entre les lignes d’entrée et de sortie d’eau moteur.'],
+  c17: ['valve', 'On the feed line, on the right of the separator.', 'Sur la ligne d’alimentation, à droite du séparateur.'],
+  c18: ['other', 'In the feed line, downstream of the feed valve.', 'Dans la ligne d’alimentation, en aval de la vanne d’alimentation.'],
+  c19: ['other', 'Connected to the feed line, upstream of the evaporator.', 'Raccordé à la ligne d’alimentation, en amont de l’évaporateur.'],
+  c20: ['instrument', 'On the lower part of the separator shell; normal level around mid-glass.', 'En partie basse du corps du séparateur ; niveau normal vers le milieu du voyant.'],
+  c21: ['instrument', 'Upstream of the ejector; normal reading 3.5–4.5 bar.', 'En amont de l’éjecteur ; valeur normale 3,5–4,5 bar.'],
+  c22: ['pump', 'Below the separator, on the fresh water line.', 'Sous le séparateur, sur la ligne d’eau douce.'],
+  c23: ['instrument', 'On the fresh water line, towards the storage tanks.', 'Sur la ligne d’eau douce, vers les caisses de stockage.'],
+  c24: ['instrument', 'On the fresh water line, downstream of the distillate pump; typical alarm threshold 2 ppm.', 'Sur la ligne d’eau douce, en aval de la pompe de distillat ; seuil d’alarme typique 2 ppm.'],
+  c25: ['valve', 'On the fresh water line, next to the salinometer.', 'Sur la ligne d’eau douce, à côté du salinomètre.'],
+  c26: ['other', 'On the bulkhead next to the unit, lower deck of the engine room.', 'Sur la cloison à côté de l’appareil, pont inférieur de la salle des machines.'],
+  c27: ['valve', 'On top of the separator shell.', 'En haut du corps du séparateur.'],
+  c28: ['other', 'Between the plates of the evaporator and of the condenser.', 'Entre les plaques de l’évaporateur et du condenseur.'],
+  c29: ['other', 'On the seawater line, upstream of the ejector pump.', 'Sur la ligne d’eau de mer, en amont de la pompe de l’éjecteur.'],
+  c30: ['valve', 'On the discharge line of the ejector pump.', 'Sur la ligne de refoulement de la pompe de l’éjecteur.'],
+  c31: ['instrument', 'On the jacket water lines of the evaporator; typically 70–80 °C at the inlet.', 'Sur les lignes d’eau moteur de l’évaporateur ; typiquement 70–80 °C à l’entrée.'],
+  c32: ['other', 'Kept next to the control panel.', 'Rangé à côté du tableau de commande.'],
+}
+
+export const catalogue: Component[] = baseCatalogue.map((c) => {
+  const [type, en, fr] = catalogueMeta[c.id]
+  return { ...c, type, note: { en, fr } }
+})
+
 export const partName = (id: PartId): L => {
   const c = catalogue.find((x) => x.part === id)
   return c?.name ?? { en: id, fr: id }
@@ -80,6 +128,8 @@ export const partName = (id: PartId): L => {
 export type IdQuestion = {
   id: string
   part: PartId
+  /** Catalogue component the question is about */
+  component?: string
   kind: 'name' | 'function'
   question: L
   options: L[]
@@ -88,86 +138,65 @@ export type IdQuestion = {
   explanation: L
 }
 
-const nm = (id: PartId) => partName(id)
+/** Small seeded generator — fixed draw for the demo data, `Math.random` for a real attempt. */
+export function seededRandom(seed: number) {
+  let s = seed
+  return () => {
+    s = (s * 16807) % 2147483647
+    return (s - 1) / 2147483646
+  }
+}
 
-export const identificationQuestions: IdQuestion[] = [
-  {
-    id: 'id1n', part: 'evaporator', kind: 'name',
-    question: { en: 'What is the name of the highlighted part?', fr: 'Quel est le nom de la pièce en surbrillance ?' },
-    options: [nm('evaporator'), nm('condenser'), nm('demister'), nm('separator')], correct: 0,
-    hint: { en: 'It is on the hot side — fed by the engine jacket water.', fr: 'Elle est côté chaud — alimentée par l’eau de refroidissement moteur.' },
-    explanation: { en: 'These are the evaporator plates: jacket water heats them so that seawater boils at low temperature under vacuum.', fr: 'Ce sont les plaques de l’évaporateur : l’eau moteur les chauffe pour que l’eau de mer bouille à basse température sous vide.' },
-  },
-  {
-    id: 'id1f', part: 'evaporator', kind: 'function',
-    question: { en: 'What is the function of the highlighted part?', fr: 'Quelle est la fonction de la pièce en surbrillance ?' },
-    options: [
-      { en: 'Turn seawater into vapour', fr: 'Transformer l’eau de mer en vapeur' },
-      { en: 'Turn vapour back into water', fr: 'Retransformer la vapeur en eau' },
-      { en: 'Measure salinity', fr: 'Mesurer la salinité' },
-      { en: 'Create the vacuum', fr: 'Créer le vide' },
-    ], correct: 0,
-    hint: { en: 'Think about what heat does to water.', fr: 'Pensez à l’effet de la chaleur sur l’eau.' },
-    explanation: { en: 'The evaporator transfers heat from the jacket water to the seawater, which evaporates.', fr: 'L’évaporateur transfère la chaleur de l’eau moteur à l’eau de mer, qui s’évapore.' },
-  },
-  {
-    id: 'id2n', part: 'condenser', kind: 'name',
-    question: { en: 'What is the name of the highlighted part?', fr: 'Quel est le nom de la pièce en surbrillance ?' },
-    options: [nm('evaporator'), nm('condenser'), nm('ejector'), nm('salinometer')], correct: 1,
-    hint: { en: 'Cooled by seawater, at the top of the shell.', fr: 'Refroidie par l’eau de mer, en haut du corps.' },
-    explanation: { en: 'These are the condenser plates, cooled by seawater from the ejector pump.', fr: 'Ce sont les plaques du condenseur, refroidies par l’eau de mer de la pompe de l’éjecteur.' },
-  },
-  {
-    id: 'id2f', part: 'condenser', kind: 'function',
-    question: { en: 'What is the function of the highlighted part?', fr: 'Quelle est la fonction de la pièce en surbrillance ?' },
-    options: [
-      { en: 'Heat the seawater', fr: 'Chauffer l’eau de mer' },
-      { en: 'Condense the vapour into fresh water', fr: 'Condenser la vapeur en eau douce' },
-      { en: 'Retain droplets', fr: 'Retenir les gouttelettes' },
-      { en: 'Pump the brine overboard', fr: 'Rejeter la saumure à la mer' },
-    ], correct: 1,
-    hint: { en: 'The opposite of the evaporator.', fr: 'L’inverse de l’évaporateur.' },
-    explanation: { en: 'Cold plates take heat from the vapour, which condenses: this is the fresh water produced.', fr: 'Les plaques froides prennent la chaleur de la vapeur, qui se condense : c’est l’eau douce produite.' },
-  },
-  {
-    id: 'id3n', part: 'demister', kind: 'name',
-    question: { en: 'What is the name of the highlighted part?', fr: 'Quel est le nom de la pièce en surbrillance ?' },
-    options: [nm('separator'), nm('flowmeter'), nm('demister'), nm('condenser')], correct: 2,
-    hint: { en: 'A mesh placed in the vapour path.', fr: 'Une grille placée sur le trajet de la vapeur.' },
-    explanation: { en: 'This is the demister, between the evaporator and the condenser.', fr: 'C’est le dévésiculeur, entre l’évaporateur et le condenseur.' },
-  },
-  {
-    id: 'id3f', part: 'demister', kind: 'function',
-    question: { en: 'What is the function of the highlighted part?', fr: 'Quelle est la fonction de la pièce en surbrillance ?' },
-    options: [
-      { en: 'Measure the flow', fr: 'Mesurer le débit' },
-      { en: 'Break the vacuum', fr: 'Casser le vide' },
-      { en: 'Cool the vapour', fr: 'Refroidir la vapeur' },
-      { en: 'Retain seawater droplets', fr: 'Retenir les gouttelettes d’eau de mer' },
-    ], correct: 3,
-    hint: { en: 'Without it, salt would reach the condenser.', fr: 'Sans elle, du sel atteindrait le condenseur.' },
-    explanation: { en: 'The demister stops salty droplets carried by the vapour, keeping salinity low.', fr: 'Le dévésiculeur arrête les gouttelettes salées entraînées par la vapeur et garde une salinité basse.' },
-  },
-  {
-    id: 'id4n', part: 'ejector', kind: 'name',
-    question: { en: 'What is the name of the highlighted part?', fr: 'Quel est le nom de la pièce en surbrillance ?' },
-    options: [nm('ejectorPump'), nm('ejector'), nm('dumpValve'), nm('overboardValve')], correct: 1,
-    hint: { en: 'Two functions at once — liquid and gas extraction.', fr: 'Deux fonctions à la fois — extraction liquide et gaz.' },
-    explanation: { en: 'This is the combined brine/air ejector, driven by seawater from the ejector pump.', fr: 'C’est l’éjecteur combiné saumure/air, entraîné par l’eau de mer de la pompe de l’éjecteur.' },
-  },
-  {
-    id: 'id4f', part: 'ejector', kind: 'function',
-    question: { en: 'What is the function of the highlighted part?', fr: 'Quelle est la fonction de la pièce en surbrillance ?' },
-    options: [
-      { en: 'Extract brine and gases, and maintain the vacuum', fr: 'Extraire la saumure et les gaz, et maintenir le vide' },
-      { en: 'Measure the salt content', fr: 'Mesurer la teneur en sel' },
-      { en: 'Heat the jacket water', fr: 'Chauffer l’eau moteur' },
-      { en: 'Feed the evaporator', fr: 'Alimenter l’évaporateur' },
-    ], correct: 0,
-    hint: { en: 'Its name says “combined”.', fr: 'Son nom dit « combiné ».' },
-    explanation: { en: 'The ejector sucks brine and non-condensable gases out of the shell — that is what keeps the vacuum.', fr: 'L’éjecteur aspire la saumure et les gaz incondensables du corps — c’est ce qui maintient le vide.' },
-  },
-]
+function shuffled<T>(arr: T[], rnd: () => number) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+export const ID_QUESTION_COUNT = 8
+
+/**
+ * Identification attempt: 8 DIFFERENT parts drawn from the 32 components, 4 Name + 4 Function
+ * questions mixed. A part is asked once only — the Name explanation would give away the
+ * Function answer (and vice versa).
+ */
+export function drawIdentification(rnd: () => number = Math.random): IdQuestion[] {
+  const parts = shuffled(Array.from(new Set(catalogue.map((c) => c.part))), rnd).slice(0, ID_QUESTION_COUNT)
+  const kinds = shuffled<IdQuestion['kind']>(
+    parts.map((_, i) => (i < parts.length / 2 ? 'name' : 'function')),
+    rnd,
+  )
+  return parts.map((part, i) => {
+    const same = catalogue.filter((c) => c.part === part)
+    const c = same[Math.floor(rnd() * same.length)]
+    const kind = kinds[i]
+    // Distractors never come from the same machine part (they would also be right)
+    const options = shuffled([c, ...shuffled(catalogue.filter((x) => x.part !== part), rnd).slice(0, 3)], rnd)
+    return {
+      id: `${c.id}-${kind}`,
+      part,
+      component: c.id,
+      kind,
+      question:
+        kind === 'name'
+          ? { en: 'What is the name of the highlighted part?', fr: 'Quel est le nom de la pièce en surbrillance ?' }
+          : { en: 'What is the function of the highlighted part?', fr: 'Quelle est la fonction de la pièce en surbrillance ?' },
+      options: options.map((o) => (kind === 'name' ? o.name : o.definition)),
+      correct: options.indexOf(c),
+      hint: c.hint,
+      explanation:
+        kind === 'name'
+          ? { en: `${c.name.en} — ${c.note.en}`, fr: `${c.name.fr} — ${c.note.fr}` }
+          : { en: `${c.name.en}: ${c.definition.en}`, fr: `${c.name.fr} : ${c.definition.fr}` },
+    }
+  })
+}
+
+/** Fixed draw used by the demo attempts. */
+export const identificationQuestions: IdQuestion[] = drawIdentification(seededRandom(11))
 
 /* --------------------------- Procedures ----------------------------- */
 
@@ -198,27 +227,73 @@ export const startupProcedure: ProcStep[] = [
   { id: 's13', target: 'logbook', label: { en: 'Log the startup parameters', fr: 'Consigner les paramètres de démarrage' }, why: { en: 'Readings are recorded for follow-up and troubleshooting.', fr: 'Les relevés sont consignés pour le suivi et le diagnostic.' }, wrong: { en: 'The readings have not been recorded.', fr: 'Les relevés n’ont pas été consignés.' }, hint1: { en: 'The last step is administrative.', fr: 'La dernière étape est administrative.' }, hint2: { en: 'Click the logbook next to the control panel.', fr: 'Cliquez sur le journal à côté du tableau.' } },
 ]
 
-export type ToolId = 'hand' | 'flashlight' | 'padlock' | 'wrench' | 'screwdriver' | 'torqueWrench' | 'pliers'
+export type ToolId = 'inspect' | 'hand' | 'flashlight' | 'padlock' | 'wrench' | 'screwdriver' | 'torqueWrench' | 'pliers'
 
-export const tools: { id: ToolId; name: L }[] = [
-  { id: 'hand', name: { en: 'Hand (inspect / operate)', fr: 'Main (observer / manœuvrer)' } },
-  { id: 'flashlight', name: { en: 'Flashlight', fr: 'Lampe torche' } },
-  { id: 'padlock', name: { en: 'Lockout padlock & tag', fr: 'Cadenas et étiquette de consignation' } },
-  { id: 'wrench', name: { en: 'Open-end spanner', fr: 'Clé plate' } },
-  { id: 'screwdriver', name: { en: 'Screwdriver', fr: 'Tournevis' } },
-  { id: 'torqueWrench', name: { en: 'Torque wrench', fr: 'Clé dynamométrique' } },
-  { id: 'pliers', name: { en: 'Extraction pliers', fr: 'Pince d’extraction' } },
+/** `use` = one line "when to use" shown in the toolbox tooltip. */
+export const tools: { id: ToolId; name: L; use: L }[] = [
+  { id: 'inspect', name: { en: 'Visual check', fr: 'Contrôle visuel' }, use: { en: 'Read an instrument or observe a part without touching it.', fr: 'Lire un instrument ou observer une pièce sans y toucher.' } },
+  { id: 'hand', name: { en: 'Hand', fr: 'Main' }, use: { en: 'Operate a valve, a switch or a pump by hand.', fr: 'Manœuvrer une vanne, un interrupteur ou une pompe à la main.' } },
+  { id: 'flashlight', name: { en: 'Flashlight', fr: 'Lampe torche' }, use: { en: 'Light up a dark area to see inside.', fr: 'Éclairer une zone sombre pour voir à l’intérieur.' } },
+  { id: 'padlock', name: { en: 'Lockout padlock', fr: 'Cadenas de consignation' }, use: { en: 'Lock out and tag a piece of equipment before working on it.', fr: 'Consigner et étiqueter un équipement avant d’intervenir.' } },
+  { id: 'wrench', name: { en: 'Open-end spanner', fr: 'Clé plate' }, use: { en: 'Loosen or tighten bolts and nuts.', fr: 'Desserrer ou serrer des boulons et des écrous.' } },
+  { id: 'screwdriver', name: { en: 'Screwdriver', fr: 'Tournevis' }, use: { en: 'Loosen or tighten screws.', fr: 'Desserrer ou serrer des vis.' } },
+  { id: 'torqueWrench', name: { en: 'Torque wrench', fr: 'Clé dynamométrique' }, use: { en: 'Tighten bolts to a specified torque.', fr: 'Serrer des boulons à un couple prescrit.' } },
+  { id: 'pliers', name: { en: 'Extraction pliers', fr: 'Pince d’extraction' }, use: { en: 'Grip and pull out a small object.', fr: 'Saisir et extraire un petit objet.' } },
 ]
 
-/** Fault story: a foreign body (strainer debris) obstructs the ejector nozzle. */
+/** Briefing shown when the alarm trips: symptoms only — the cause is for the student to find. */
 export const repairScenario: L = {
-  en: 'Fault: the brine level is rising in the separator. A piece of debris that passed through a damaged strainer is obstructing the ejector nozzle. Locate and extract the foreign body safely.',
-  fr: 'Panne : le niveau de saumure monte dans le séparateur. Un débris passé à travers un filtre endommagé obstrue la buse de l’éjecteur. Localisez et extrayez le corps étranger en sécurité.',
+  en: 'High brine level alarm. The fresh water flow is dropping and the vacuum is degrading. Diagnose the cause, then intervene.',
+  fr: 'Alarme niveau de saumure haut. Le débit d’eau douce baisse et le vide se dégrade. Diagnostiquez la cause puis intervenez.',
+}
+
+/** Delay before the alarm trips: the exercise starts in normal operation (longer in VR). */
+export const REPAIR_ALARM_DELAY_MS = { Web: 3000, VR: 5000 }
+
+/** Explicit diagnosis, validated after the observation steps and before the repair steps. */
+export const repairDiagnosis = {
+  afterStep: 2,
+  question: { en: 'Diagnosis: what is the most probable cause?', fr: 'Diagnostic : quelle est la cause la plus probable ?' } as L,
+  options: [
+    {
+      id: 'nozzle', correct: true,
+      label: { en: 'Blocked ejector nozzle', fr: 'Buse de l’éjecteur obstruée' },
+      feedback: { en: 'High driving pressure, rising brine level and falling vacuum: the ejector no longer extracts — its nozzle is obstructed.', fr: 'Pression motrice haute, saumure qui monte et vide qui baisse : l’éjecteur n’extrait plus — sa buse est obstruée.' },
+    },
+    {
+      id: 'pump', correct: false,
+      label: { en: 'Ejector pump failure', fr: 'Panne de la pompe de l’éjecteur' },
+      feedback: { en: 'A failed pump would give a LOW driving pressure — here it is above the normal range.', fr: 'Une pompe en panne donnerait une pression motrice BASSE — ici elle dépasse la plage normale.' },
+    },
+    {
+      id: 'air', correct: false,
+      label: { en: 'Air leak into the shell', fr: 'Entrée d’air dans le corps' },
+      feedback: { en: 'An air leak degrades the vacuum, but it does not push the driving pressure above its range.', fr: 'Une entrée d’air dégrade le vide, mais ne fait pas monter la pression motrice au-dessus de sa plage.' },
+    },
+    {
+      id: 'jacket', correct: false,
+      label: { en: 'Low jacket-water flow', fr: 'Débit d’eau moteur insuffisant' },
+      feedback: { en: 'Less heat means less production, but the brine would still be extracted.', fr: 'Moins de chaleur réduit la production, mais la saumure resterait extraite.' },
+    },
+  ] as { id: string; correct: boolean; label: L; feedback: L }[],
+}
+
+/**
+ * Instrument readings shown with the "Visual check" tool — consistent with the technical
+ * sheet (driving pressure 3.5–4.5 bar, vacuum ≥ 90 %).
+ */
+export type PlantState = 'normal' | 'fault' | 'stopped'
+export const instrumentReadings: Partial<Record<PartId, { label: L } & Record<PlantState, L>>> = {
+  vacuumGauge: { label: { en: 'Vacuum', fr: 'Vide' }, normal: { en: '93 %', fr: '93 %' }, fault: { en: '71 %', fr: '71 %' }, stopped: { en: '0 %', fr: '0 %' } },
+  ejectorGauge: { label: { en: 'Driving pressure', fr: 'Pression motrice' }, normal: { en: '4.0 bar', fr: '4,0 bar' }, fault: { en: '5.6 bar', fr: '5,6 bar' }, stopped: { en: '0 bar', fr: '0 bar' } },
+  brineGauge: { label: { en: 'Brine level', fr: 'Niveau de saumure' }, normal: { en: '45 %', fr: '45 %' }, fault: { en: '88 %', fr: '88 %' }, stopped: { en: '88 %', fr: '88 %' } },
+  flowmeter: { label: { en: 'Fresh water flow', fr: 'Débit d’eau douce' }, normal: { en: '0.85 m³/h', fr: '0,85 m³/h' }, fault: { en: '0.30 m³/h', fr: '0,30 m³/h' }, stopped: { en: '0 m³/h', fr: '0 m³/h' } },
+  salinometer: { label: { en: 'Salinity', fr: 'Salinité' }, normal: { en: '1.5 ppm', fr: '1,5 ppm' }, fault: { en: '4.8 ppm', fr: '4,8 ppm' }, stopped: { en: '— ppm', fr: '— ppm' } },
 }
 
 export const repairProcedure: ProcStep[] = [
-  { id: 'r1', target: 'brineGauge', tool: 'hand', label: { en: 'Notice the rising brine level', fr: 'Constater la montée du niveau de saumure' }, why: { en: 'A rising brine level means brine is no longer extracted.', fr: 'Un niveau qui monte signifie que la saumure n’est plus extraite.' }, wrong: { en: 'Start by observing the symptom.', fr: 'Commencez par observer le symptôme.' }, hint1: { en: 'What does the alarm talk about?', fr: 'De quoi parle l’alarme ?' }, hint2: { en: 'Use your hand on the brine level sight glass of the separator.', fr: 'Utilisez la main sur le voyant de niveau de saumure du séparateur.' } },
-  { id: 'r2', target: 'ejectorGauge', tool: 'hand', label: { en: 'Compare ejector pressure and brine level: nozzle obstruction', fr: 'Comparer pression éjecteur et niveau : obstruction de la buse' }, why: { en: 'High driving pressure + rising brine = the ejector nozzle is blocked.', fr: 'Pression motrice élevée + saumure qui monte = buse de l’éjecteur obstruée.' }, wrong: { en: 'Confirm the diagnosis before acting.', fr: 'Confirmez le diagnostic avant d’agir.' }, hint1: { en: 'Another reading confirms the diagnosis.', fr: 'Une autre mesure confirme le diagnostic.' }, hint2: { en: 'Use your hand on the ejector pressure gauge.', fr: 'Utilisez la main sur le manomètre de l’éjecteur.' } },
+  { id: 'r1', target: 'brineGauge', tool: 'inspect', label: { en: 'Notice the rising brine level', fr: 'Constater la montée du niveau de saumure' }, why: { en: 'A rising brine level means brine is no longer extracted.', fr: 'Un niveau qui monte signifie que la saumure n’est plus extraite.' }, wrong: { en: 'Start by observing the symptom.', fr: 'Commencez par observer le symptôme.' }, hint1: { en: 'What does the alarm talk about?', fr: 'De quoi parle l’alarme ?' }, hint2: { en: 'Use the visual check on the brine level sight glass of the separator.', fr: 'Utilisez le contrôle visuel sur le voyant de niveau de saumure du séparateur.' } },
+  { id: 'r2', target: 'ejectorGauge', tool: 'inspect', label: { en: 'Read the driving pressure upstream of the ejector', fr: 'Relever la pression motrice en amont de l’éjecteur' }, why: { en: 'The driving pressure is above its normal range (3.5–4.5 bar) while the brine level rises.', fr: 'La pression motrice dépasse sa plage normale (3,5–4,5 bar) alors que le niveau de saumure monte.' }, wrong: { en: 'Take a second reading before concluding.', fr: 'Relevez une seconde mesure avant de conclure.' }, hint1: { en: 'Another instrument sits close to the ejector.', fr: 'Un autre instrument se trouve près de l’éjecteur.' }, hint2: { en: 'Use the visual check on the ejector pressure gauge.', fr: 'Utilisez le contrôle visuel sur le manomètre de l’éjecteur.' } },
   { id: 'r3', target: 'controlPanel', tool: 'hand', label: { en: 'Stop the installation from the control panel', fr: 'Arrêter l’installation au tableau de commande' }, why: { en: 'Never work on a running installation.', fr: 'Jamais d’intervention sur une installation en marche.' }, wrong: { en: 'The installation is still running.', fr: 'L’installation est encore en marche.' }, hint1: { en: 'Safety first: stop everything.', fr: 'La sécurité d’abord : tout arrêter.' }, hint2: { en: 'Use your hand on the control panel.', fr: 'Utilisez la main sur le tableau de commande.' } },
   { id: 'r4', target: 'ejectorPump', tool: 'padlock', label: { en: 'Lock out and tag out the ejector pump', fr: 'Consigner et étiqueter la pompe de l’éjecteur' }, why: { en: 'Lockout prevents anyone restarting the pump during the work.', fr: 'La consignation empêche quiconque de redémarrer la pompe pendant l’intervention.' }, wrong: { en: 'The pump could still be restarted by someone else.', fr: 'La pompe pourrait encore être redémarrée par quelqu’un.' }, hint1: { en: 'Make the stop permanent until you are done.', fr: 'Rendez l’arrêt définitif jusqu’à la fin.' }, hint2: { en: 'Use the lockout padlock on the ejector pump.', fr: 'Utilisez le cadenas de consignation sur la pompe.' } },
   { id: 'r5', target: 'dischargeValve', tool: 'hand', label: { en: 'Close the pump valves and drain the ejector circuit', fr: 'Fermer les vannes de la pompe et vidanger le circuit' }, why: { en: 'Opening a pressurised, full circuit floods the work area.', fr: 'Ouvrir un circuit plein et sous pression inonde la zone.' }, wrong: { en: 'The circuit is still full of seawater.', fr: 'Le circuit est encore plein d’eau de mer.' }, hint1: { en: 'Isolate and empty before opening.', fr: 'Isoler et vider avant d’ouvrir.' }, hint2: { en: 'Use your hand on the pump discharge valve.', fr: 'Utilisez la main sur la vanne de refoulement.' } },
@@ -271,7 +346,12 @@ export type QuizQuestion = {
   correct: number[]
   explanation: L
   media?: { kind: 'part'; part: PartId } | { kind: 'image'; dataUrl: string; name: string }
+  /** 'COMIM' = default bank (provided, not editable) · 'School' = written by the school */
   source: 'COMIM' | 'School'
+  /** School questions: only the author may edit */
+  authorId?: string
+  authorName?: string
+  authorRole?: 'teacher' | 'admin'
 }
 
 const q = (

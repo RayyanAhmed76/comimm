@@ -8,11 +8,13 @@ export function Tooltip({
   children,
   className,
   align = 'center',
+  side = 'bottom',
 }: {
   content: React.ReactNode
   children: React.ReactNode
   className?: string
   align?: 'center' | 'left' | 'right'
+  side?: 'top' | 'bottom'
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -28,7 +30,9 @@ export function Tooltip({
         <span
           role="tooltip"
           className={cn(
-            'pointer-events-none absolute top-full z-50 mt-2 w-max max-w-[260px] rounded-lg bg-navy-950 px-3 py-2 text-left text-xs font-medium normal-case leading-snug tracking-normal text-white shadow-xl',
+            'pointer-events-none absolute z-50 w-max max-w-[260px] rounded-lg bg-navy-950 px-3 py-2 text-left text-xs font-medium normal-case leading-snug tracking-normal text-white shadow-xl',
+            side === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2',
+            side === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2',
             align === 'center' && 'left-1/2 -translate-x-1/2',
             align === 'left' && 'left-0',
             align === 'right' && 'right-0',

@@ -8,6 +8,13 @@ import type { Lang } from '@/lib/i18n'
  */
 export const muteStore = createStore('mute', () => false)
 
+/** Separate levels for the voice and for the ambience / effects (0..1). */
+export const volumeStore = createStore('volume', () => ({ voice: 1, ambience: 0.6 }))
+
+/** Notified when the voice starts / stops — the ambience is ducked under it. */
+export const voiceListeners = new Set<(speaking: boolean) => void>()
+const notify = (speaking: boolean) => voiceListeners.forEach((l) => l(speaking))
+
 export function setMuted(muted: boolean) {
   muteStore.set(muted)
   if (muted) stopSpeaking()
@@ -19,6 +26,7 @@ export function audioSupported() {
 
 export function stopSpeaking() {
   if (audioSupported()) window.speechSynthesis.cancel()
+  notify(false)
 }
 
 export function speak(
@@ -34,8 +42,14 @@ export function speak(
   const voice = synth.getVoices().find((v) => v.lang.toLowerCase().startsWith(lang))
   if (voice) u.voice = voice
   u.rate = 1
+  u.volume = volumeStore.get().voice
   if (opts.onBoundary) u.onboundary = (e) => opts.onBoundary?.(e.charIndex)
-  if (opts.onEnd) u.onend = () => opts.onEnd?.()
+  u.onstart = () => notify(true)
+  u.onend = () => {
+    notify(false)
+    opts.onEnd?.()
+  }
+  u.onerror = () => notify(false)
   synth.speak(u)
   return true
 }

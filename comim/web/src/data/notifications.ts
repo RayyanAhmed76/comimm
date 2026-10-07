@@ -1,5 +1,5 @@
 import { createStore, uid } from '@/lib/store'
-import type { L } from '@/lib/i18n'
+import { fmtDate, type L } from '@/lib/i18n'
 import type { Role } from '@/data/mock'
 import { DEMO_NOW } from '@/data/mock'
 import {
@@ -110,7 +110,7 @@ export function buildNotifications(role: Role, userId: string, studentId?: strin
           date: DEMO_NOW,
           to: `/platform/licenses?q=${encodeURIComponent(e.name)}`,
           title: { en: 'Licence expiring within 30 days', fr: 'Licence expirant sous 30 jours' },
-          body: { en: `${e.name} — ${e.expiry}`, fr: `${e.name} — ${e.expiry}` },
+          body: { en: `${e.name} — ${fmtDate(e.expiry, 'en')}`, fr: `${e.name} — ${fmtDate(e.expiry, 'fr')}` },
         })
       }
       if (e.usedSeats / e.seats >= 0.9) {
@@ -151,12 +151,17 @@ export function buildNotifications(role: Role, userId: string, studentId?: strin
       for (const m of assignedModules(assignmentsStore.get(), student)) {
         const as = assignmentsStore.get().find((a) => a.classId === student.classId && a.module === m)
         if (!as) continue
+        // Done exercises no longer need a reminder; past-due ones are flagged as late
+        if (attemptsStore.get().some((a) => a.studentId === student.id && a.module === m && a.status === 'completed')) continue
+        const late = daysBetween(as.dueDate, DEMO_NOW) > 1
         out.push({
           id: `as-${as.id}`,
           date: `${as.dueDate}T08:00:00`,
           to: '/student',
-          title: { en: 'Exercise assigned', fr: 'Exercice assigné' },
-          body: { en: `${moduleNames[m].en} — due ${as.dueDate}`, fr: `${moduleNames[m].fr} — pour le ${as.dueDate}` },
+          title: late ? { en: 'Exercise overdue', fr: 'Exercice en retard' } : { en: 'Exercise assigned', fr: 'Exercice assigné' },
+          body: late
+            ? { en: `${moduleNames[m].en} — was due on ${fmtDate(as.dueDate, 'en')}`, fr: `${moduleNames[m].fr} — était à faire pour le ${fmtDate(as.dueDate, 'fr')}` }
+            : { en: `${moduleNames[m].en} — due on ${fmtDate(as.dueDate, 'en')}`, fr: `${moduleNames[m].fr} — pour le ${fmtDate(as.dueDate, 'fr')}` },
         })
       }
       if (student.finalQuiz === 'Open') {

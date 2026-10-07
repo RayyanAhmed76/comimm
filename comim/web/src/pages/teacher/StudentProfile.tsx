@@ -64,7 +64,7 @@ export function StudentProfile() {
     if (newClass === student.classId) return setMoving(false)
     const target = classes.find((c) => c.id === newClass)
     studentsStore.set((p) => p.map((s) => (s.id === student.id ? { ...s, classId: newClass } : s)))
-    addSchoolAudit({ author: user?.name ?? '', profile: 'teacher', action: 'classChange', target: `${student.name}: ${cls?.name.split(' ')[0]} → ${target?.name.split(' ')[0]}`, screen: 'studentProfile' })
+    addSchoolAudit({ author: user?.name ?? '', profile: 'teacher', action: 'classChange', target: `${student.name}: ${cls?.name.split(' ')[0]} → ${target?.name.split(' ')[0]}`, ref: { kind: 'student', id: student.id, label: student.name, sub: { code: 'student' } }, changes: [{ field: 'class', before: cls?.name.split(' ')[0] ?? '—', after: target?.name.split(' ')[0] ?? '—' }], screen: 'studentProfile' })
     setMoving(false)
   }
 
@@ -93,7 +93,7 @@ export function StudentProfile() {
             </div>
             <div className="flex flex-col items-end gap-3">
               <Badge tone={student.finalQuiz === 'Completed' ? 'green' : student.finalQuiz === 'Locked' ? 'gray' : 'blue'}>
-                {t('teacher.finalQuizStatus', { status: t(student.finalQuiz === 'Completed' ? 'common.completed' : student.finalQuiz === 'Locked' ? 'common.locked' : 'common.open') })}
+                {t('teacher.finalQuizStatus', { status: t(student.finalQuiz === 'Completed' ? 'common.completed' : student.finalQuiz === 'Locked' ? 'dash.quizNotOpen' : 'common.open') })}
               </Badge>
               <div className="flex flex-wrap justify-end gap-2">
                 {settings.delegation && (

@@ -5,7 +5,7 @@ import { useSyncExternalStore } from 'react'
  * Every screen that edits demo data writes through one of these so that
  * changes made on one side (e.g. teacher) are visible on the other (e.g. student).
  */
-const PREFIX = 'comim:v2:'
+const PREFIX = 'comim:v3:'
 const registry: { reset: () => void }[] = []
 
 export function createStore<T>(key: string, initial: () => T) {

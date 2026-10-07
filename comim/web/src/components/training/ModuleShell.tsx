@@ -64,7 +64,7 @@ export function ExitDialog({
 }: {
   open: boolean
   onClose: () => void
-  kind: 'exercise' | 'tour' | 'quiz' | 'preview'
+  kind: 'exercise' | 'tour' | 'quiz'
   onSave?: () => void
   onDiscard: () => void
   dark?: boolean
@@ -91,27 +91,6 @@ export function ExitDialog({
         }
       >
         <p className="text-sm leading-relaxed">{t('ex.quitQuizWarning')}</p>
-      </Modal>
-    )
-  }
-  if (kind === 'preview') {
-    return (
-      <Modal
-        open={open}
-        onClose={onClose}
-        dark={dark}
-        size="sm"
-        title={t('ex.exitPreviewTitle')}
-        footer={
-          <>
-            <Button variant="secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={onDiscard}>{t('preview.back')}</Button>
-          </>
-        }
-      >
-        <p className="text-sm">{t('preview.banner')}</p>
       </Modal>
     )
   }
@@ -172,10 +151,11 @@ export function ModuleShell({
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const title = loc(moduleNames[env.module])
-  const kind = env.preview ? 'preview' : exit?.kind ?? 'exercise'
-  const guard = exit ? () => setOpen(true) : undefined
+  const kind = exit?.kind ?? 'exercise'
+  // Preview: nothing is recorded, so there is nothing to confirm — the banner link and the breadcrumb leave directly
+  const guard = exit && !env.preview ? () => setOpen(true) : undefined
 
-  const dialog = exit && (
+  const dialog = exit && !env.preview && (
     <ExitDialog
       open={open}
       onClose={() => setOpen(false)}
@@ -188,7 +168,7 @@ export function ModuleShell({
       }}
       onDiscard={() => {
         setOpen(false)
-        if (!env.preview) exit.onDiscard()
+        exit.onDiscard()
         navigate(env.menuPath)
       }}
     />
@@ -196,7 +176,7 @@ export function ModuleShell({
 
   if (env.device === 'VR') {
     return (
-      <VrShell badge={title} hints={vrHints} menuItems={vrMenuItems} onLogoClick={guard} onExit={guard}>
+      <VrShell badge={title} hints={vrHints} menuItems={vrMenuItems} onLogoClick={guard} onExit={guard} fit={!!exit}>
         {children}
         {dialog}
       </VrShell>
@@ -208,10 +188,12 @@ export function ModuleShell({
     <TrainingShell
       dark={dark}
       preview={env.preview}
+      fit={!!exit}
+      lockNav={exit?.kind === 'quiz'}
       onLogoClick={guard}
       crumbs={[{ label: menuLabel, to: env.menuPath, onClick: guard }, { label: title }]}
       actions={
-        exit ? (
+        guard ? (
           <Button variant="dark" className="rounded-full px-3 py-1.5 text-xs" onClick={() => setOpen(true)}>
             <LogOut className="h-3.5 w-3.5" />
             {t('ex.exit')}

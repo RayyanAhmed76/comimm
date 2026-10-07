@@ -36,6 +36,8 @@ export function AttemptDetail() {
       profile: 'teacher',
       action: 'scoreAdjustment',
       target: `${student?.name} · ${moduleNames[attempt.module].en}: ${before}% → ${score}%`,
+      ref: { kind: 'student', id: student?.id, label: student?.name ?? '', sub: moduleNames[attempt.module] },
+      changes: [{ field: 'score', before: `${before} %`, after: `${score} %` }],
       screen: 'studentProfile',
       justification: why.trim(),
     })

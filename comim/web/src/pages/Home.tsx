@@ -53,7 +53,6 @@ export default function Home() {
           <div className="mb-8 text-center">
             <div className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300">COMIM Training</div>
             <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{t('auth.title')}</h1>
-            <p className="mt-2 text-sm text-slate-300">{t('auth.subtitle')}</p>
           </div>
 
           <form onSubmit={submit} className="rounded-2xl border border-white/10 bg-navy-900/70 p-6 shadow-xl backdrop-blur" noValidate>
@@ -109,7 +108,6 @@ export default function Home() {
               {t('student.signIn')}
             </Button>
 
-            <p className="mt-4 text-center text-xs text-slate-400">{t('auth.demoHint', { login: demo(role)?.login, password: demo(role)?.password })}</p>
           </form>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-sm">

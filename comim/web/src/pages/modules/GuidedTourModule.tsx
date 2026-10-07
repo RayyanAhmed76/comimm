@@ -70,10 +70,10 @@ export default function GuidedTourModule() {
       vrMenuItems={[{ label: t('audio.replay'), icon: RotateCcw, onClick: narration.play }]}
     >
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="relative min-h-[340px] flex-1 p-2 sm:p-4 lg:min-h-0">
+        <div className="relative min-h-[340px] flex-1 p-3 sm:p-4 lg:min-h-0">
           <MachineView highlight={seg.focus} exploded={seg.exploded} showLabels dimOthers={seg.focus.length > 0} />
         </div>
-        <aside className="flex w-full flex-col justify-between border-t border-white/10 bg-[#0c1a2e]/95 p-5 text-white lg:w-[400px] lg:border-t-0 lg:border-l">
+        <aside className="flex w-full flex-col justify-between border-t border-white/10 bg-[#0c1a2e]/95 p-5 text-white lg:min-h-0 lg:w-[400px] lg:overflow-y-auto lg:border-t-0 lg:border-l">
           <div>
             <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.14em] text-sky-300">
               <span>{t('student.narration')}</span>

@@ -20,6 +20,8 @@ export function TrainingShell({
   actions,
   preview = false,
   onLogout,
+  fit = false,
+  lockNav = false,
 }: {
   children: React.ReactNode
   crumbs?: Crumb[]
@@ -30,6 +32,10 @@ export function TrainingShell({
   actions?: React.ReactNode
   preview?: boolean
   onLogout?: () => void
+  /** Exercise screens: the page is exactly the screen height, panels scroll on their own */
+  fit?: boolean
+  /** Final Quiz in progress: no search (it would open the catalogue) */
+  lockNav?: boolean
 }) {
   const { t } = useTranslation()
   const loc = useLoc()
@@ -38,8 +44,8 @@ export function TrainingShell({
   const home = preview || user?.role === 'teacher' ? '/teacher/preview' : '/student'
 
   return (
-    <div className={cn('flex min-h-screen flex-col overflow-x-hidden', dark ? 'grid-blueprint text-white' : 'bg-[#F4F7F9] text-ink')}>
-      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#0A1633] px-3 py-2.5 text-white sm:px-5">
+    <div className={cn('flex min-h-screen flex-col overflow-x-hidden', fit && 'lg:h-dvh lg:min-h-0 lg:overflow-hidden', dark ? 'grid-blueprint text-white' : 'bg-[#F4F7F9] text-ink')}>
+      <header className="sticky top-0 z-30 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#0A1633] px-3 py-2.5 text-white sm:px-5">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
             type="button"
@@ -58,14 +64,14 @@ export function TrainingShell({
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2">
           <MuteButton variant="dark" />
-          {!preview && user?.role === 'student' && <GlobalSearch variant="dark" />}
+          {!preview && !lockNav && user?.role === 'student' && <GlobalSearch variant="dark" />}
           {!preview && user?.role === 'student' && <NotificationBell variant="dark" />}
           <UserMenu variant="dark" onLogout={onLogout} />
         </div>
       </header>
 
       {preview && (
-        <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-400 px-4 py-2 text-sm font-semibold text-navy-950">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 bg-amber-400 px-4 py-2 text-sm font-semibold text-navy-950">
           <span className="inline-flex items-center gap-2">
             <Eye className="h-4 w-4" />
             {t('preview.banner')}
@@ -77,7 +83,7 @@ export function TrainingShell({
       )}
 
       {(crumbs || actions) && (
-        <div className={cn('flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5 sm:px-6', dark ? 'border-white/10 bg-navy-950/60' : 'border-slate-200 bg-white')}>
+        <div className={cn('flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5 sm:px-6', dark ? 'border-white/10 bg-navy-950/60' : 'border-slate-200 bg-white')}>
           {crumbs ? <Breadcrumbs items={crumbs} variant={dark ? 'dark' : 'light'} /> : <span />}
           {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>

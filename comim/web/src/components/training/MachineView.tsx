@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Minus, Plus, RotateCcw } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Crosshair, Maximize, Minus, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/cn'
 import { useLoc } from '@/lib/i18n'
@@ -196,14 +196,25 @@ export type MachineViewProps = {
   exploded?: boolean
   onPartClick?: (id: PartId) => void
   flash?: { part: PartId; ok: boolean } | null
+  /** Part the view frames automatically (zoom + centre) whenever it changes */
   focus?: PartId | null
-  initialZoom?: number
   gauges?: React.ReactNode
   controls?: React.ReactNode
   className?: string
   hideFlowLabels?: boolean
   dimOthers?: boolean
+  /** Wheel zoom — switch off when the view sits inside a scrolling page */
+  wheelZoom?: boolean
+  /** Small readouts pinned above a part (instrument readings) */
+  tags?: { part: PartId; text: string; tone?: 'ok' | 'warn' }[]
 }
+
+type View = { z: number; x: number; y: number }
+
+/** Inner margin (drawing units) so that nothing touches the edge of the container. */
+const MARGIN = 28
+const MAX_ZOOM = 6
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
 export function MachineView({
   highlight = [],
@@ -214,26 +225,34 @@ export function MachineView({
   onPartClick,
   flash = null,
   focus = null,
-  initialZoom = 1,
   gauges,
   controls,
   className,
   hideFlowLabels = false,
   dimOthers = false,
+  wheelZoom = true,
+  tags = [],
 }: MachineViewProps) {
   const { t } = useTranslation()
   const loc = useLoc()
-  const [zoom, setZoom] = useState(initialZoom)
+  const svgRef = useRef<SVGSVGElement>(null)
+  const anim = useRef(0)
+  const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const gesture = useRef({ startX: 0, startY: 0, dragging: false, suppressClick: false })
 
-  const focusPart = PARTS.find((p) => p.id === focus)
-  const pad = exploded ? 60 : 0
-  const vbW = (W + pad * 2) / zoom
-  const vbH = (H + pad * 2) / zoom
-  const fx = focusPart ? focusPart.cx : CX
-  const fy = focusPart ? focusPart.cy : CY
-  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
-  const vbX = zoom === 1 ? -pad : clamp(fx - vbW / 2, -pad, W + pad - vbW)
-  const vbY = zoom === 1 ? -pad : clamp(fy - vbH / 2, -pad, H + pad - vbH)
+  const pad = (exploded ? 60 : 0) + MARGIN
+  const bw = W + pad * 2
+  const bh = H + pad * 2
+  const clampView = (v: View): View => {
+    const z = clamp(v.z, 1, MAX_ZOOM)
+    const hw = bw / z / 2
+    const hh = bh / z / 2
+    return { z, x: clamp(v.x, -pad + hw, W + pad - hw), y: clamp(v.y, -pad + hh, H + pad - hh) }
+  }
+  const [rawView, setView] = useState<View>({ z: 1, x: CX, y: CY })
+  const view = clampView(rawView)
+  const vbW = bw / view.z
+  const vbH = bh / view.z
 
   const offset = (p: PartDef) => {
     if (!exploded) return { dx: 0, dy: 0 }
@@ -242,13 +261,149 @@ export function MachineView({
     return { dx: (p.cx - CX) * 0.14, dy: (p.cy - CY) * 0.14 }
   }
 
+  const animateTo = (target: View) => {
+    cancelAnimationFrame(anim.current)
+    const to = clampView(target)
+    // No animation frames in a background tab: jump straight to the target
+    if (document.hidden) return setView(to)
+    let from: View | null = null
+    const t0 = performance.now()
+    const tick = (now: number) => {
+      const k = Math.min(1, (now - t0) / 350)
+      const e = 1 - Math.pow(1 - k, 3)
+      setView((cur) => {
+        from ??= clampView(cur)
+        return { z: from.z + (to.z - from.z) * e, x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e }
+      })
+      if (k < 1) anim.current = requestAnimationFrame(tick)
+    }
+    anim.current = requestAnimationFrame(tick)
+  }
+
+  /** Zoom and centre on a part */
+  const frame = (id: PartId) => {
+    const p = PARTS.find((x) => x.id === id)
+    if (!p) return
+    const o = offset(p)
+    animateTo({ z: clamp(Math.min(bw / (p.r * 7), bh / (p.r * 5)), 1.5, 4), x: p.cx + o.dx, y: p.cy + o.dy })
+  }
+  const recenter = () => animateTo({ z: 1, x: CX, y: CY })
+
+  const toSvg = (clientX: number, clientY: number) => {
+    const m = svgRef.current?.getScreenCTM()
+    if (!m) return { x: CX, y: CY }
+    const p = new DOMPoint(clientX, clientY).matrixTransform(m.inverse())
+    return { x: p.x, y: p.y }
+  }
+
+  /** Zoom by `factor`, keeping the point `at` (drawing units) under the cursor */
+  const zoomAt = (factor: number, at?: { x: number; y: number }) =>
+    setView((cur) => {
+      const c = clampView(cur)
+      const z = clamp(c.z * factor, 1, MAX_ZOOM)
+      const a = at ?? { x: c.x, y: c.y }
+      const k = c.z / z
+      return clampView({ z, x: a.x - (a.x - c.x) * k, y: a.y - (a.y - c.y) * k })
+    })
+  const zoomStep = (factor: number) => animateTo({ ...view, z: clamp(view.z * factor, 1, MAX_ZOOM) })
+
+  // Auto-frame the focused part (Identification question, reference sheet…)
+  useEffect(() => {
+    if (focus) frame(focus)
+    else recenter()
+    return () => cancelAnimationFrame(anim.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, exploded])
+
+  // Wheel zoom centred on the cursor (needs a non-passive listener to stop the page scroll)
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg || !wheelZoom) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      cancelAnimationFrame(anim.current)
+      zoomAt(Math.exp(-e.deltaY * 0.0015), toSvg(e.clientX, e.clientY))
+    }
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    return () => svg.removeEventListener('wheel', onWheel)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wheelZoom, exploded])
+
+  const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 1) gesture.current = { startX: e.clientX, startY: e.clientY, dragging: false, suppressClick: false }
+  }
+  const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    const prev = pointers.current.get(e.pointerId)
+    if (!prev) return
+    const cur = { x: e.clientX, y: e.clientY }
+    const g = gesture.current
+    if (pointers.current.size === 1) {
+      // Drag = pan (a small threshold keeps plain clicks on parts working)
+      if (!g.dragging && Math.hypot(cur.x - g.startX, cur.y - g.startY) < 5) return
+      if (!g.dragging) {
+        g.dragging = true
+        g.suppressClick = true
+        cancelAnimationFrame(anim.current)
+        e.currentTarget.setPointerCapture(e.pointerId)
+      }
+      const a = toSvg(prev.x, prev.y)
+      const b = toSvg(cur.x, cur.y)
+      setView((c) => clampView({ ...c, x: c.x - (b.x - a.x), y: c.y - (b.y - a.y) }))
+    } else if (pointers.current.size === 2) {
+      // Pinch = zoom centred between the two fingers
+      const other = [...pointers.current.entries()].find(([id]) => id !== e.pointerId)![1]
+      const before = Math.hypot(prev.x - other.x, prev.y - other.y)
+      const after = Math.hypot(cur.x - other.x, cur.y - other.y)
+      g.suppressClick = true
+      if (before > 0) zoomAt(after / before, toSvg((cur.x + other.x) / 2, (cur.y + other.y) / 2))
+    }
+    pointers.current.set(e.pointerId, cur)
+  }
+  const onPointerEnd = (e: React.PointerEvent<SVGSVGElement>) => {
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size === 0) gesture.current.dragging = false
+  }
+
+  const onDoubleClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const id = (e.target as Element).closest('[data-part]')?.getAttribute('data-part') as PartId | null
+    // On an exercise scene a double-click on a part is two answers: only the background zooms
+    if (id && onPartClick) return
+    if (id && id !== 'separator') frame(id)
+    else {
+      const at = toSvg(e.clientX, e.clientY)
+      animateTo({ z: clamp(view.z * 2, 1, MAX_ZOOM), x: at.x, y: at.y })
+    }
+  }
+
   const guidePart = PARTS.find((p) => p.id === guide)
-  const btn = 'flex h-9 w-9 items-center justify-center rounded-full bg-navy-950/80 text-white ring-1 ring-white/15 backdrop-blur hover:bg-navy-800'
+  const target = guide ?? focus ?? (highlight.length === 1 ? highlight[0] : wrong.length === 1 ? wrong[0] : null)
+  const atHome = view.z === 1
+  const btn =
+    'flex h-9 items-center justify-center gap-1.5 rounded-full bg-navy-950/80 px-2.5 text-xs font-semibold text-white ring-1 ring-white/15 backdrop-blur hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-navy-950/80'
 
   return (
-    <div className={cn('relative flex h-full min-h-[300px] w-full flex-col', className)}>
-      {gauges && <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-2">{gauges}</div>}
-      <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} preserveAspectRatio="xMidYMid meet" className="h-full min-h-0 w-full flex-1" role="img" aria-label={t('machine.ariaLabel')}>
+    <div className={cn('flex h-full min-h-[240px] w-full flex-col gap-2', className)}>
+      {gauges && <div className="flex shrink-0 flex-wrap gap-2">{gauges}</div>}
+      <svg
+        ref={svgRef}
+        viewBox={`${view.x - vbW / 2} ${view.y - vbH / 2} ${vbW} ${vbH}`}
+        preserveAspectRatio="xMidYMid meet"
+        className={cn('h-full min-h-0 w-full flex-1 touch-none select-none', view.z > 1 && 'cursor-grab active:cursor-grabbing')}
+        role="img"
+        aria-label={t('machine.ariaLabel')}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        onDoubleClick={onDoubleClick}
+        onClickCapture={(e) => {
+          if (gesture.current.suppressClick) {
+            e.stopPropagation()
+            gesture.current.suppressClick = false
+          }
+        }}
+      >
         <g style={{ opacity: exploded ? 0.18 : 1, transition: 'opacity 700ms' }} strokeDasharray={exploded ? '6 8' : undefined}>
           {PIPES.map((p, i) => (
             <path key={i} d={p.d} stroke={p.color} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.85} />
@@ -309,6 +464,22 @@ export function MachineView({
           )
         })}
 
+        {tags.map((tag) => {
+          const p = PARTS.find((x) => x.id === tag.part)
+          if (!p) return null
+          const w = tag.text.length * 6.4 + 16
+          const y = p.cy - Math.min(p.r, 40) - 30
+          const color = tag.tone === 'warn' ? '#fb923c' : '#34d399'
+          return (
+            <g key={tag.part} pointerEvents="none">
+              <rect x={p.cx - w / 2} y={y} width={w} height={22} rx={6} fill="#0a1628" stroke={color} strokeWidth={1.5} />
+              <text x={p.cx} y={y + 15} textAnchor="middle" fontSize={11.5} fontWeight={700} fill={color} fontFamily="monospace">
+                {tag.text}
+              </text>
+            </g>
+          )
+        })}
+
         {guidePart && (
           <g pointerEvents="none" style={{ transform: `translate(${offset(guidePart).dx}px, ${offset(guidePart).dy}px)` }}>
             <circle cx={guidePart.cx} cy={guidePart.cy} r={guidePart.r + 22} fill="#fb923c" fillOpacity={0.12} stroke="#fb923c" strokeWidth={3}>
@@ -322,22 +493,40 @@ export function MachineView({
         )}
       </svg>
 
-      <div className="pointer-events-none absolute right-3 bottom-3 left-3 z-10 flex items-end justify-between gap-2">
-        <div className="pointer-events-auto flex gap-2">
-          <button type="button" onClick={() => setZoom((z) => Math.min(3, z + 0.5))} className={btn} aria-label={t('machine.zoomIn')}>
+      {/* Controls sit under the scene, never on top of it */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => zoomStep(1.5)} disabled={view.z >= MAX_ZOOM} className={cn(btn, 'w-9 px-0')} aria-label={t('machine.zoomIn')} title={t('machine.zoomIn')}>
             <Plus className="h-4 w-4" />
           </button>
-          <button type="button" onClick={() => setZoom((z) => Math.max(1, z - 0.5))} className={btn} aria-label={t('machine.zoomOut')}>
+          <button type="button" onClick={() => zoomStep(1 / 1.5)} disabled={atHome} className={cn(btn, 'w-9 px-0')} aria-label={t('machine.zoomOut')} title={t('machine.zoomOut')}>
             <Minus className="h-4 w-4" />
           </button>
-          {zoom !== 1 && (
-            <button type="button" onClick={() => setZoom(1)} className={btn} aria-label={t('machine.resetZoom')}>
-              <RotateCcw className="h-4 w-4" />
+          <button type="button" onClick={recenter} disabled={atHome} className={btn} title={t('machine.recenter')}>
+            <Maximize className="h-4 w-4" />
+            <span className="hidden sm:inline">{t('machine.recenter')}</span>
+          </button>
+          {target && (
+            <button type="button" onClick={() => frame(target)} className={btn} title={t('machine.targetPart')}>
+              <Crosshair className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('machine.targetPart')}</span>
             </button>
           )}
         </div>
-        {controls && <div className="pointer-events-auto flex flex-wrap justify-end gap-2">{controls}</div>}
+        {controls && <div className="flex flex-wrap justify-end gap-2">{controls}</div>}
       </div>
     </div>
+  )
+}
+
+/** Small render of a single part — catalogue cards and parts lists. */
+export function PartThumb({ part, className }: { part: PartId; className?: string }) {
+  const p = PARTS.find((x) => x.id === part)
+  if (!p) return null
+  const r = Math.max(p.r, 18) * 1.3 + 6
+  return (
+    <svg viewBox={`${p.cx - r} ${p.cy - r} ${r * 2} ${r * 2}`} className={className} aria-hidden="true">
+      {p.draw({ fill: '#1c3558', stroke: '#7dd3fc', sw: Math.max(2, r / 20) })}
+    </svg>
   )
 }

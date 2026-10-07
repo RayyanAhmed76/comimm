@@ -9,7 +9,10 @@ import { Field, Modal, fieldClass } from '@/components/ui/Modal'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/cn'
 import { fmtDate, useLang } from '@/lib/i18n'
-import { addSchoolAudit, establishmentsStore, settingsStore } from '@/data/stores'
+import { classCode, trackLabel } from '@/lib/labels'
+import { toast } from '@/components/ui/Toast'
+import { AlertTriangle } from 'lucide-react'
+import { addSchoolAudit, classesStore, establishmentsStore, settingsStore, studentsStore } from '@/data/stores'
 import { sendContactRequest } from '@/data/notifications'
 
 const MAX_LOGO = 500 * 1024
@@ -21,6 +24,9 @@ export function Settings() {
   const { user } = useAuth()
   const settings = settingsStore.use()
   const est = establishmentsStore.use().find((e) => e.id === 'imc')
+  const classes = classesStore.use()
+  const students = studentsStore.use()
+  const [trackBlocked, setTrackBlocked] = useState<{ track: string; classes: string[]; students: number } | null>(null)
   const [name, setName] = useState(settings.name)
   const [contact, setContact] = useState(settings.contact)
   const [address, setAddress] = useState(settings.address)
@@ -46,12 +52,51 @@ export function Settings() {
 
   const save = () => {
     settingsStore.set((s) => ({ ...s, name, contact, address, logo }))
-    addSchoolAudit({ author: user?.name ?? '', profile: 'admin', action: 'settingsUpdate', target: logo !== settings.logo ? 'Logo' : 'Establishment information', screen: 'settings' })
+    addSchoolAudit({
+      author: user?.name ?? '',
+      profile: 'admin',
+      action: 'settingsUpdate',
+      target: logo !== settings.logo ? 'Logo' : 'Establishment information',
+      ref: { kind: 'setting', label: { code: 'establishmentInfo' }, sub: { code: 'settings' } },
+      changes: [
+        ...(name !== settings.name ? [{ field: 'name', before: settings.name, after: name }] : []),
+        ...(contact !== settings.contact ? [{ field: 'contact', before: settings.contact, after: contact }] : []),
+        ...(address !== settings.address ? [{ field: 'address', before: settings.address, after: address }] : []),
+        ...(logo !== settings.logo ? [{ field: 'logo', before: settings.logo ? { code: 'enabled' } : { code: 'none' }, after: logo ? { code: 'updated' } : { code: 'none' } }] : []),
+      ],
+      screen: 'settings',
+    })
     setSaved(true)
     window.setTimeout(() => setSaved(false), 2500)
+    toast(t('settings.savedToast'))
   }
 
-  const setTracks = (tracks: string[]) => settingsStore.set((s) => ({ ...s, tracks }))
+  const setting = (code: string) => ({ kind: 'setting' as const, label: { code }, sub: { code: 'settings' } })
+
+  const toggleDelegation = () => {
+    const on = !settings.delegation
+    settingsStore.set((s) => ({ ...s, delegation: on }))
+    addSchoolAudit({ author: user?.name ?? '', profile: 'admin', action: 'delegationToggled', target: 'Delegation', ref: setting('delegation'), changes: [{ field: 'delegation', before: { code: on ? 'disabled' : 'enabled' }, after: { code: on ? 'enabled' : 'disabled' } }], screen: 'settings' })
+    toast(t('settings.savedToast'))
+  }
+
+  const addTrack = (track: string) => {
+    settingsStore.set((s) => ({ ...s, tracks: [...s.tracks, track] }))
+    addSchoolAudit({ author: user?.name ?? '', profile: 'admin', action: 'trackAdded', target: `Tracks: + ${track}`, ref: setting('tracks'), changes: [{ field: 'track', before: { code: 'none' }, after: { code: `track.${track}` } }], screen: 'settings' })
+    toast(t('settings.savedToast'))
+  }
+
+  // A track cannot be removed while classes / students still use it
+  const removeTrack = (track: string) => {
+    const used = classes.filter((c) => c.track === track && !c.archived)
+    if (used.length) {
+      setTrackBlocked({ track, classes: used.map((c) => `${classCode(c.name)} (${c.schoolYear})`), students: students.filter((s) => used.some((c) => c.id === s.classId)).length })
+      return
+    }
+    settingsStore.set((s) => ({ ...s, tracks: s.tracks.filter((x) => x !== track) }))
+    addSchoolAudit({ author: user?.name ?? '', profile: 'admin', action: 'trackRemoved', target: `Tracks: − ${track}`, ref: setting('tracks'), changes: [{ field: 'track', before: { code: `track.${track}` }, after: { code: 'none' } }], screen: 'settings' })
+    toast(t('settings.savedToast'))
+  }
 
   return (
     <AppShell breadcrumb={[{ label: t('admin.settingsTitle') }]}>
@@ -143,7 +188,7 @@ export function Settings() {
               type="button"
               role="switch"
               aria-checked={settings.delegation}
-              onClick={() => settingsStore.set((s) => ({ ...s, delegation: !s.delegation }))}
+              onClick={toggleDelegation}
               className={cn(
                 'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold',
                 settings.delegation ? 'bg-success-50 text-success-600 ring-1 ring-green-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
@@ -161,19 +206,28 @@ export function Settings() {
           <div className="mt-4 flex flex-wrap gap-2">
             {settings.tracks.map((track) => (
               <span key={track} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-ink">
-                {track}
-                <button type="button" onClick={() => setTracks(settings.tracks.filter((x) => x !== track))} className="rounded-full p-0.5 text-muted hover:bg-slate-200 hover:text-ink" aria-label={`${t('common.remove')} ${track}`}>
+                {trackLabel(track, lang)}
+                <button type="button" onClick={() => removeTrack(track)} className="rounded-full p-0.5 text-muted hover:bg-slate-200 hover:text-ink" aria-label={`${t('common.remove')} ${trackLabel(track, lang)}`}>
                   <X className="h-3.5 w-3.5" />
                 </button>
               </span>
             ))}
           </div>
+          {trackBlocked && (
+            <p role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm text-orange-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="flex-1">{t('settings.trackInUse', { track: trackLabel(trackBlocked.track, lang), classes: trackBlocked.classes.join(', '), count: trackBlocked.students })}</span>
+              <button type="button" onClick={() => setTrackBlocked(null)} aria-label="Close" className="rounded p-0.5 hover:bg-orange-100">
+                <X className="h-4 w-4" />
+              </button>
+            </p>
+          )}
           <form
             onSubmit={(e) => {
               e.preventDefault()
               const v = newTrack.trim()
               if (!v || settings.tracks.includes(v)) return
-              setTracks([...settings.tracks, v])
+              addTrack(v)
               setNewTrack('')
             }}
             className="mt-4 flex flex-wrap gap-2"
@@ -196,7 +250,7 @@ export function Settings() {
                 <p className="text-sm text-muted">{t('admin.questionBankManage')}</p>
               </div>
             </div>
-            <Link to="/teacher/question-bank">
+            <Link to="/admin/questions">
               <Button variant="secondary">
                 {t('admin.openQuestionBank')}
                 <ChevronRight className="h-4 w-4" />

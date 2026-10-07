@@ -23,6 +23,8 @@ import { cn } from '@/lib/cn'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Breadcrumbs, GlobalSearch, NotificationBell, SchoolLogo, UserMenu, type Crumb } from '@/components/layout/HeaderParts'
+import { sidebarStore } from '@/data/stores'
+import { Toaster } from '@/components/ui/Toast'
 
 type NavItem = { to: string; labelKey: string; icon: React.ComponentType<{ className?: string }> }
 
@@ -36,6 +38,7 @@ const teacherNav: NavItem[] = [
 const adminNav: NavItem[] = [
   { to: '/admin/users', labelKey: 'nav.users', icon: Users },
   { to: '/admin/classes', labelKey: 'nav.classes', icon: LayoutGrid },
+  { to: '/admin/questions', labelKey: 'nav.questionBank', icon: BookOpen },
   { to: '/admin/audit', labelKey: 'nav.auditLog', icon: ScrollText },
   { to: '/admin/headsets', labelKey: 'nav.headsets', icon: Headphones },
   { to: '/admin/settings', labelKey: 'nav.settings', icon: Settings },
@@ -68,7 +71,9 @@ export function AppShell({
   const { user } = useAuth()
   const location = useLocation()
   const { t } = useTranslation()
-  const [collapsed, setCollapsed] = useState(false)
+  // Open / closed state is kept per user and device, across navigation and reload
+  const collapsed = sidebarStore.use()[user?.id ?? ''] ?? false
+  const setCollapsed = (fn: (v: boolean) => boolean) => sidebarStore.set((p) => ({ ...p, [user?.id ?? '']: fn(p[user?.id ?? ''] ?? false) }))
   const [mobileOpen, setMobileOpen] = useState(false)
   const items = navFor(user?.role ?? 'teacher')
   const home = homeFor(user?.role)
@@ -109,6 +114,7 @@ export function AppShell({
               <NavLink
                 key={item.to}
                 to={item.to}
+                title={compact ? t(item.labelKey) : undefined}
                 end={item.to === '/teacher' || item.to === '/platform'}
                 className={({ isActive }) =>
                   cn(
@@ -119,7 +125,7 @@ export function AppShell({
                 }
               >
                 <Icon className="h-4 w-4 shrink-0" />
-                {!compact && <span>{t(item.labelKey)}</span>}
+                {compact ? <span className="sr-only">{t(item.labelKey)}</span> : <span>{t(item.labelKey)}</span>}
               </NavLink>
             )
           })}
@@ -129,9 +135,12 @@ export function AppShell({
         <button
           type="button"
           onClick={() => setCollapsed((v) => !v)}
+          aria-expanded={!compact}
+          title={compact ? t('common.expandMenu') : undefined}
+          aria-label={compact ? t('common.expandMenu') : undefined}
           className="mt-auto flex items-center gap-2 border-t border-white/10 px-4 py-4 text-sm text-slate-300 hover:bg-white/5"
         >
-          {compact ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {compact ? <ChevronRight className="mx-auto h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           {!compact && t('common.collapseMenu')}
         </button>
       )}
@@ -173,6 +182,7 @@ export function AppShell({
         </header>
         <main className="flex-1 overflow-x-hidden p-4 sm:p-6">{children}</main>
       </div>
+      <Toaster />
     </div>
   )
 }
