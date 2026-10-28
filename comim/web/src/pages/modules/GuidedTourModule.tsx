@@ -24,7 +24,7 @@ export default function GuidedTourModule() {
   const text = loc(seg.text)
   const narration = useNarration(text)
   const isLast = segment >= tourSegments.length - 1
-  // First run: "Next" waits for the end of the narration
+  // First run: Next waits for narration. After the student completes the tour (or in teacher preview), Next can skip ahead.
   const canNext = narration.ended || alreadyDone
 
   const complete = () => {

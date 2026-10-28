@@ -141,7 +141,8 @@ export const quizInProgressStore = createStore<string[]>('quiz-in-progress', () 
 /** Side menu open / closed, per user (localStorage = per device). */
 export const sidebarStore = createStore<Record<string, boolean>>('sidebar-collapsed', () => ({}))
 export const vrOnboardedStore = createStore<string[]>('vr-onboarded', () => [])
-export const tourCompletedStore = createStore<string[]>('tour-completed', () => ['s-yb'])
+/** Empty by default: first run locks "Next" until narration ends. After finish, student id is added and replay can skip ahead. */
+export const tourCompletedStore = createStore<string[]>('tour-completed-v3', () => [])
 
 /** Exercise saved with "Exit and save" — one per student & module. */
 export type SavedProgress = {

@@ -248,7 +248,7 @@ function makeAttempt(
 const P = (s: string) => s.split('').map((c) => c === '1')
 
 const yassine: Attempt[] = [
-  makeAttempt('a-yb-t1', 's-yb', 'tour', '2026-09-04T09:00:00', 'Web', 410, [true]),
+  // Guided tour starts incomplete for the demo student (Next locked until narration ends).
   makeAttempt('a-yb-i1', 's-yb', 'identification', '2026-09-10T09:14:00', 'Web', 384, P('10110101')),
   makeAttempt('a-yb-i2', 's-yb', 'identification', '2026-09-10T09:41:00', 'VR', 352, P('11011101')),
   makeAttempt('a-yb-s1', 's-yb', 'startup', '2026-09-12T10:02:00', 'Web', 742, P('1101011011010')),
